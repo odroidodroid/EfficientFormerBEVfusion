@@ -11,6 +11,8 @@ from mmdet3d.models.builder import HEADS, build_loss
 from mmdet3d.ops.iou3d.iou3d_utils import nms_gpu
 from mmdet.core import build_bbox_coder, multi_apply
 
+head_default = {'reg': [2, 2], 'height': [1, 2], 'dim': [3, 2], 'rot': [2, 2], 'vel': [2, 2], 'heatmap': (1, 2)}
+__all__ = ["CenterHead, SeparateHead", "DCNSeparateHead"]
 
 def clip_sigmoid(x: torch.Tensor, eps: float = 1e-4) -> torch.Tensor:
     return torch.clamp(x.sigmoid_(), min=eps, max=1 - eps)
@@ -36,8 +38,8 @@ class SeparateHead(BaseModule):
 
     def __init__(
         self,
-        in_channels,
-        heads,
+        in_channels=64,
+        heads=head_default,
         head_conv=64,
         final_kernel=1,
         init_bias=-2.19,
@@ -52,6 +54,7 @@ class SeparateHead(BaseModule):
         ), "To prevent abnormal initialization behavior, init_cfg is not allowed to be set"
         super(SeparateHead, self).__init__(init_cfg=init_cfg)
         self.heads = heads
+        print(heads)
         self.init_bias = init_bias
         for head in self.heads:
             classes, num_conv = self.heads[head]
@@ -328,13 +331,15 @@ class CenterHead(BaseModule):
 
         self.task_heads = nn.ModuleList()
 
+
         for num_cls in num_classes:
-            heads = copy.deepcopy(common_heads)
-            heads.update(dict(heatmap=(num_cls, num_heatmap_convs)))
-            separate_head.update(
-                in_channels=share_conv_channel, heads=heads, num_cls=num_cls
-            )
             self.task_heads.append(builder.build_head(separate_head))
+        #     heads = copy.deepcopy(common_heads)
+        #     heads.update(dict(heatmap=(num_cls, num_heatmap_convs)))
+        #     print(heads)
+            # separate_head.update(
+            #     in_channels=share_conv_channel, heads=heads)
+            # separate_head.update(in_channels=share_conv_channel, heads=heads)
 
     def forward_single(self, x):
         """Forward function for CenterPoint.

@@ -255,6 +255,12 @@ if __name__ == "__main__":
                 ],
             ),
             make_cuda_ext(
+                name="ingroup_inds_ext",
+                module="mmdet3d.ops.ingroup_inds",
+                sources=["src/ingroup_inds.cpp"],
+                sources_cuda=["src/ingroup_inds_kernel.cu"],
+            ),
+            make_cuda_ext(
                 name="iou3d_cuda",
                 module="mmdet3d.ops.iou3d",
                 sources=[

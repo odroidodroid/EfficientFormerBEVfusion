@@ -6,17 +6,23 @@ import mmcv
 import numpy as np
 import torch
 from mmcv import Config
-from mmcv.parallel import MMDistributedDataParallel
+from mmcv.parallel import MMDistributedDataParallel, MMDataParallel
 from mmcv.runner import load_checkpoint
 from torchpack import distributed as dist
 from torchpack.utils.config import configs
-from torchpack.utils.tqdm import tqdm
-
+from mmcv.runner import wrap_fp16_model
 from mmdet3d.core import LiDARInstance3DBoxes
 from mmdet3d.core.utils import visualize_camera, visualize_lidar, visualize_map
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
+from mmdet.apis import set_random_seed
+import tqdm
 
+# import debugpy
+# debugpy.listen(1011)
+# print("Wait for debugger...")
+# debugpy.wait_for_client()
+# print("Debugger attached") 
 
 def recursive_eval(obj, globals=None):
     if globals is None:
@@ -47,6 +53,13 @@ def main() -> None:
     parser.add_argument("--bbox-score", type=float, default=None)
     parser.add_argument("--map-score", type=float, default=0.5)
     parser.add_argument("--out-dir", type=str, default="viz")
+    parser.add_argument("--seed", type=int, default=0, help="random seed")
+    parser.add_argument(
+        "--deterministic",
+        action="store_true",
+        help="whether to set deterministic options for CUDNN backend.",
+    )
+
     args, opts = parser.parse_known_args()
 
     configs.load(args.config, recursive=True)
@@ -57,35 +70,42 @@ def main() -> None:
     torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
     torch.cuda.set_device(dist.local_rank())
 
+    # set random seeds
+    if args.seed is not None:
+        set_random_seed(args.seed, deterministic=args.deterministic)
+
     # build the dataloader
-    dataset = build_dataset(cfg.data[args.split])
+    dataset = build_dataset(cfg.data.test)
     dataflow = build_dataloader(
         dataset,
         samples_per_gpu=1,
         workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=True,
+        dist=False,
         shuffle=False,
     )
 
     # build the model and load checkpoint
     if args.mode == "pred":
-        model = build_model(cfg.model)
+        cfg.model.train_cfg = None
+        model = build_model(cfg.model, test_cfg=cfg.get("test_cfg"))
+        fp16_cfg = cfg.get("fp16", None)
+        if fp16_cfg is not None:
+            wrap_fp16_model(model)
+
         load_checkpoint(model, args.checkpoint, map_location="cpu")
 
-        model = MMDistributedDataParallel(
+        model = MMDataParallel(
             model.cuda(),
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False,
-        )
+            device_ids=[0])
         model.eval()
 
-    for data in tqdm(dataflow):
+    for i, data in enumerate(dataflow):
         metas = data["metas"].data[0][0]
         name = "{}-{}".format(metas["timestamp"], metas["token"])
 
         if args.mode == "pred":
-            with torch.inference_mode():
-                outputs = model(**data)
+            with torch.no_grad(): # torch.inference_mode() 
+                outputs = model(return_loss=False, rescale=True, **data)
 
         if args.mode == "gt" and "gt_bboxes_3d" in data:
             bboxes = data["gt_bboxes_3d"].data[0][0].tensor.numpy()
@@ -136,7 +156,7 @@ def main() -> None:
                 visualize_camera(
                     os.path.join(args.out_dir, f"camera-{k}", f"{name}.png"),
                     image,
-                    bboxes=bboxes,
+                    bboxes=None,
                     labels=labels,
                     transform=metas["lidar2image"][k],
                     classes=cfg.object_classes,

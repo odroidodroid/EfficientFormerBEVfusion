@@ -281,7 +281,7 @@ data:
     object_classes: ${object_classes}
     map_classes: ${map_classes}
     modality: ${input_modality}
-    test_mode: false
+    test_mode: true
     box_type_3d: LiDAR
   test:
     type: ${dataset_type}
@@ -297,4 +297,4 @@ data:
 evaluation:
   interval: 1
   pipeline: ${test_pipeline}
- 
+  start : 0

@@ -4,3 +4,4 @@ from .lss import *
 from .second import *
 from .generalized_lss import *
 from .detectron_fpn import *
+from .pointpiller3d_scatter import *

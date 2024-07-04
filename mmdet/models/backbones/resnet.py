@@ -359,7 +359,8 @@ class ResNet(BaseModule):
     """
 
     arch_settings = {
-        18: (BasicBlock, (2, 2, 2, 2)),
+        18: (Bottleneck, (2, 2, 2, 2)), ## ResNet18 bottleneck - modified BasicBlock to Bottleneck with [512,1024,2048]
+        26: (BasicBlock, (2, 2, 2, 2)),
         34: (BasicBlock, (3, 4, 6, 3)),
         50: (Bottleneck, (3, 4, 6, 3)),
         101: (Bottleneck, (3, 4, 23, 3)),

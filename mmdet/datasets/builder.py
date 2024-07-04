@@ -130,8 +130,8 @@ def build_dataloader(dataset,
     else:
         # When model is obj:`DataParallel`
         # the batch size is samples on all the GPUS
-        batch_size = num_gpus * samples_per_gpu
-        num_workers = num_gpus * workers_per_gpu
+        batch_size = samples_per_gpu
+        num_workers = workers_per_gpu
 
     if runner_type == 'IterBasedRunner':
         # this is a batch sampler, which can yield

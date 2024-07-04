@@ -7,6 +7,7 @@ from mmcv.ops import (
     roi_align,
     sigmoid_focal_loss,
 )
+from .ingroup_inds.ingroup_inds_op import ingroup_inds
 
 from .ball_query import ball_query
 from .furthest_point_sample import (
@@ -89,4 +90,5 @@ __all__ = [
     "PAConvCUDASAModule",
     "PAConvCUDASAModuleMSG",
     "bev_pool",
+    "ingroup_inds",
 ]

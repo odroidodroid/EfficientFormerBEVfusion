@@ -1,3 +1,5 @@
+
+
 import torch
 from mmcv.parallel import MMDistributedDataParallel
 from mmcv.runner import (
@@ -42,15 +44,16 @@ def train_model(
     ]
 
     # put model on gpus
-    find_unused_parameters = cfg.get("find_unused_parameters", False)
+    find_unused_parameters = cfg.get("find_unused_parameters", True)
     # Sets the `find_unused_parameters` parameter in
     # torch.nn.parallel.DistributedDataParallel
-    model = MMDistributedDataParallel(
-        model.cuda(),
-        device_ids=[torch.cuda.current_device()],
-        broadcast_buffers=False,
-        find_unused_parameters=find_unused_parameters,
-    )
+    # model = MMDistributedDataParallel(
+    #     model.cuda(),
+    #     device_ids=[torch.cuda.current_device()],
+    #     broadcast_buffers=False,
+    #     find_unused_parameters=find_unused_parameters,
+    # )
+    model = model.cuda()
 
     # build runner
     optimizer = build_optimizer(model, cfg.optimizer)
@@ -71,7 +74,7 @@ def train_model(
 
     # an ugly workaround to make .log and .log.json filenames the same
     runner.timestamp = timestamp
-
+    distributed = False
     # fp16 setting
     fp16_cfg = cfg.get("fp16", None)
     if fp16_cfg is not None:

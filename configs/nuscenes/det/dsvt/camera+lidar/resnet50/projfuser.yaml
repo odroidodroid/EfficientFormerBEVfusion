@@ -1,0 +1,28 @@
+model:
+  encoders:
+    camera:
+      backbone:
+        type: ResNet
+        depth: 50
+        out_indices: [0, 1, 2, 3]
+      neck:
+        type: FPN
+        in_channels: [256, 512, 1024, 2048]
+        out_channels: 256
+        start_level: 0
+        num_outs: 4
+        norm_cfg:
+          type: BN2d
+          requires_grad: true
+        act_cfg:
+          type: ReLU
+          inplace: true
+        upsample_cfg:
+          mode: bilinear
+          align_corners: false
+      vtransform: None
+  fuser:
+    type: ProjFuser
+    in_channels: [80, 256]
+    out_channels: 256
+

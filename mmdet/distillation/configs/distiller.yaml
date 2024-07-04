@@ -1,0 +1,85 @@
+seed: 0
+deterministic: false
+
+checkpoint_config:
+  interval: 1
+  max_keep_ckpts: 1
+
+log_config:
+  interval: 50
+  hooks:
+    -
+      type: TextLoggerHook
+    -
+      type: TensorboardLoggerHook
+
+load_from: pretrained/bevfusion-det_resnet18-KD.pth
+resume_from: null
+
+cudnn_benchmark: false
+fp16:
+  loss_scale: 
+    growth_interval: 2000
+
+max_epochs: 20
+runner:
+  type: DistillEpochBasedRunner
+  max_epochs: 20
+
+## distiller settings
+find_unused_parameters: true
+weight: 5.0
+tau: 1.0
+distiller :
+  type: DetectionDistiller
+  teacher_pretrained: pretrained/bevfusion-det_resnet50.pth
+  student_pretrained: pretrained/resnet18_epoch1.pth
+  distill_cfg: 
+    [
+      {
+        student_module: encoders.camera.neck.fpn_convs.0.conv,
+        teacher_module: encoders.camera.neck.fpn_convs.0.conv,
+        output_hook: True,
+        methods: [{
+          type: ChannelWiseDivergence,
+          name: loss_cw_fpn_0,
+          student_channels: 256,
+          teacher_channels : 256,
+          tau: 1.0,
+          weight: 5.0}]
+      },
+      {
+        student_module: encoders.camera.neck.fpn_convs.1.conv,
+        teacher_module: encoders.camera.neck.fpn_convs.1.conv,
+        output_hook: True,
+        methods: [{
+          type: ChannelWiseDivergence,
+          name: loss_cw_fpn_1,
+          student_channels: 256,
+          teacher_channels : 256,
+          tau: 1.0,
+          weight: 5.0}]
+      }
+      # ,
+      # {
+      #   student_module: encoders.camera.neck.lateral_convs.2.conv,
+      #   teacher_module: encoders.camera.neck.lateral_convs.2.conv,
+      #   output_hook: True,
+      #   methods: [{
+      #     type: ChannelWiseDivergence,
+      #     name: loss_cw_fpn_2,
+      #     student_channels: 2048,
+      #     teacher_channels : 2048,
+      #     tau: $tau,
+      #     weight: $weight}]      
+      # }
+    ]
+      
+
+student_cfg: configs/nuscenes/det/transfusion/secfpn/camera+lidar/resnet18/convfuser.yaml
+teacher_cfg: configs/nuscenes/det/transfusion/secfpn/camera+lidar/resnet50/convfuser.yaml
+optimizer: 
+  type: SGD
+  lr: 0.001 
+  momentum: 0.09
+  weight_decay: 0.0001

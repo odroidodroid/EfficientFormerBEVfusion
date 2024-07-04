@@ -4,7 +4,7 @@ import torch
 from mmcv.runner import auto_fp16, force_fp32
 from torch import nn
 from torch.nn import functional as F
-
+import time
 from mmdet3d.models.builder import (
     build_backbone,
     build_fuser,
@@ -14,10 +14,12 @@ from mmdet3d.models.builder import (
 )
 from mmdet3d.ops import Voxelization, DynamicScatter
 from mmdet3d.models import FUSIONMODELS
-
+from mmcv.runner import _load_checkpoint
 
 from .base import Base3DFusionModel
-
+import numpy as np
+import matplotlib.pyplot as plt
+import os
 __all__ = ["BEVFusion"]
 
 
@@ -39,33 +41,46 @@ class BEVFusion(Base3DFusionModel):
                 {
                     "backbone": build_backbone(encoders["camera"]["backbone"]),
                     "neck": build_neck(encoders["camera"]["neck"]),
-                    "vtransform": build_vtransform(encoders["camera"]["vtransform"]),
+                    "vtransform": build_vtransform(encoders["camera"]["vtransform"]) if encoders["camera"]["vtransform"] is not None else None,
                 }
             )
         if encoders.get("lidar") is not None:
             if encoders["lidar"]["voxelize"].get("max_num_points", -1) > 0:
                 voxelize_module = Voxelization(**encoders["lidar"]["voxelize"])
+                self.encoders["lidar"] = nn.ModuleDict(
+                    {
+                        "voxelize": voxelize_module,
+                        "backbone": build_backbone(encoders["lidar"]["backbone"]),
+                    }
+                )
+                self.voxelize_reduce = encoders["lidar"].get("voxelize_reduce", True)
+                self.voxelize_flag = True
             else:
-                voxelize_module = DynamicScatter(**encoders["lidar"]["voxelize"])
-            self.encoders["lidar"] = nn.ModuleDict(
-                {
-                    "voxelize": voxelize_module,
-                    "backbone": build_backbone(encoders["lidar"]["backbone"]),
-                }
-            )
-            self.voxelize_reduce = encoders["lidar"].get("voxelize_reduce", True)
-
+                #voxelize_module = DynamicPillarVFE(**encoders["lidar"]["voxelize"])
+                self.encoders["lidar"] = nn.ModuleDict({
+                    "backbone": build_backbone(encoders["lidar"]["backbone"])
+                    })
+                self.voxelize_flag = False
+            if encoders["lidar"].get("neck") is not None :
+                self.encoders["lidar"].add_module("neck", build_neck(encoders["lidar"]["neck"]))
+                self.lidar_neck = True
+            else : 
+                self.lidar_neck = None
         if fuser is not None:
             self.fuser = build_fuser(fuser)
         else:
             self.fuser = None
-
-        self.decoder = nn.ModuleDict(
-            {
-                "backbone": build_backbone(decoder["backbone"]),
-                "neck": build_neck(decoder["neck"]),
-            }
-        )
+        if decoder.get("backbone") is not None :
+            self.decoder = nn.ModuleDict(
+                {
+                    "backbone": build_backbone(decoder["backbone"]),
+                }
+            )
+        if decoder.get("neck") is not None :
+            self.decoder.add_module("neck", build_neck(decoder["neck"]))
+            self.decoder_neck_flag = True
+        else :
+            self.decoder_neck_flag = None
         self.heads = nn.ModuleDict()
         for name in heads:
             if heads[name] is not None:
@@ -83,7 +98,52 @@ class BEVFusion(Base3DFusionModel):
 
     def init_weights(self) -> None:
         if "camera" in self.encoders:
-            self.encoders["camera"]["backbone"].init_weights()
+            # self.encoders["camera"]["backbone"].init_weights()
+            pretrained = self.encoders["camera"]["backbone"].init_cfg.checkpoint
+            self.load_ckpt_internimage(pretrained)
+        else :
+            train_dsvt = False
+            if train_dsvt :
+                pretrained_dsvt = "pretrained/DSVT_Nuscenes_val.pth"
+                self.load_ckpt_dsvt(pretrained_dsvt)
+                
+    def load_ckpt_internimage(self, pretrained) : 
+        state_dict = _load_checkpoint(pretrained, map_location='cpu')
+        if 'state_dict' in state_dict :
+            _state_dict = state_dict["state_dict"]
+        elif 'model' in state_dict :
+            _state_dict = state_dict["model"]
+        else :
+            _state_dict = state_dict
+        new_dict = {}
+        for key in _state_dict.keys() :
+            new_dict['encoders.camera.backbone.'+key] = _state_dict[key]
+        self.load_state_dict(new_dict, False)
+        
+        
+    def load_ckpt_dsvt(self, pretrained) :
+        state_dict = torch.load(pretrained, map_location='cpu')
+        state_dict = state_dict["model_state"]
+        new_dict = {}
+        for key in state_dict.keys() :
+            string = key.split('.')
+            if string[0] == 'vfe' :
+                new_dict['encoders.lidar.backbone.'+ key] = state_dict[key]
+            elif string[0] == 'backbone_3d' :
+                latter = ".".join(string[1:])
+                new_dict['encoders.lidar.backbone.'+ latter] = state_dict[key]
+            elif string[0] == 'backbone_2d' :
+                latter = ".".join(string[1:])
+                new_dict['decoder.backbone.'+ latter] = state_dict[key]
+            elif string[0] == 'dense_head' :
+                if string[1] == 'prediction_head' :
+                    latter = ".".join(string[2:])
+                    new_dict['heads.object.prediction_heads.'+latter] = state_dict[key]
+                else :
+                    latter = ".".join(string[1:])
+                    new_dict['heads.object.'+ latter] = state_dict[key]
+        self.load_state_dict(new_dict, False)
+
 
     def extract_camera_features(
         self,
@@ -101,16 +161,15 @@ class BEVFusion(Base3DFusionModel):
     ) -> torch.Tensor:
         B, N, C, H, W = x.size()
         x = x.view(B * N, C, H, W)
-
         x = self.encoders["camera"]["backbone"](x)
         x = self.encoders["camera"]["neck"](x)
-
         if not isinstance(x, torch.Tensor):
             x = x[0]
 
+        # return x
+    
         BN, C, H, W = x.size()
         x = x.view(B, int(BN / B), C, H, W)
-
         x = self.encoders["camera"]["vtransform"](
             x,
             points,
@@ -127,9 +186,17 @@ class BEVFusion(Base3DFusionModel):
         return x
 
     def extract_lidar_features(self, x) -> torch.Tensor:
-        feats, coords, sizes = self.voxelize(x)
-        batch_size = coords[-1, 0] + 1
-        x = self.encoders["lidar"]["backbone"](feats, coords, batch_size, sizes=sizes)
+        #feats, coords, sizes = self.voxelize(x)
+        #batch_size = coords[-1, 0] + 1
+        if self.voxelize_flag :
+            feats, coords, sizes = self.voxelize(x)
+            batch_size = coords[-1, 0] + 1
+            x = self.encoders["lidar"]["backbone"](feats, coords, batch_size)
+        else :
+            batch_size = len(x)
+            x = self.encoders["lidar"]["backbone"](x, batch_size)
+        if self.lidar_neck is not None :
+            x = self.encoders["lidar"]["neck"](x)
         return x
 
     @torch.no_grad()
@@ -159,7 +226,6 @@ class BEVFusion(Base3DFusionModel):
                     -1, 1
                 )
                 feats = feats.contiguous()
-
         return feats, coords, sizes
 
     @auto_fp16(apply_to=("img", "points"))
@@ -184,6 +250,21 @@ class BEVFusion(Base3DFusionModel):
         if isinstance(img, list):
             raise NotImplementedError
         else:
+            if not isinstance(img, torch.Tensor) :
+                img = img.data[0].half().cuda()
+                points = [points.data[0][0].cuda(), points.data[0][1].cuda(), points.data[0][2].cuda(), points.data[0][3].cuda()]
+                camera2ego = camera2ego.data[0].cuda()
+                lidar2ego = lidar2ego.data[0].cuda()
+                lidar2camera = lidar2camera.data[0].cuda()
+                lidar2image = lidar2image.data[0].cuda()
+                camera_intrinsics = camera_intrinsics.data[0].cuda()
+                camera2lidar = camera2lidar.data[0].cuda()
+                img_aug_matrix = img_aug_matrix.data[0].cuda()
+                lidar_aug_matrix = lidar_aug_matrix.data[0].cuda()
+                metas = metas.data[0]
+                gt_masks_bev = gt_masks_bev.cuda()
+                gt_bboxes_3d = [gt_bboxes_3d.data[0][0], gt_bboxes_3d.data[0][1], gt_bboxes_3d.data[0][2], gt_bboxes_3d.data[0][3]]
+                gt_labels_3d = [gt_labels_3d.data[0][0].cuda(), gt_labels_3d.data[0][1].cuda(), gt_labels_3d.data[0][2].cuda(), gt_labels_3d.data[0][3].cuda()]
             outputs = self.forward_single(
                 img,
                 points,
@@ -245,21 +326,62 @@ class BEVFusion(Base3DFusionModel):
             else:
                 raise ValueError(f"unsupported sensor: {sensor}")
             features.append(feature)
-
+            visualize_bev = False
+            if visualize_bev :
+                bs, bev_ch, bev_h, bev_w = feature.shape
+                bev_feature = feature.reshape(bev_ch, bev_h, bev_w).cpu().numpy()
+                for bch in range(0, 5) :
+                    channel_feature = bev_feature[bch]
+                    plt.imshow(channel_feature, cmap='viridis')
+                    plt.colorbar()
+                    plt.grid(b=None)
+                    plt.savefig(os.path.join('runs', f'{sensor}_channel_{bch}.png'))
+                    plt.close()
+                    
         if not self.training:
             # avoid OOM
             features = features[::-1]
 
         if self.fuser is not None:
             x = self.fuser(features)
+            
         else:
             assert len(features) == 1, features
             x = features[0]
 
         batch_size = x.shape[0]
 
+        visualize_bev = False
+        if visualize_bev :
+            bs, bev_ch, bev_h, bev_w = x.shape
+            bev_feature = x.reshape(bev_ch, bev_h, bev_w).cpu().numpy()
+            for bch in range(0, 5) :
+                channel_feature = bev_feature[bch]
+                plt.imshow(channel_feature, cmap='viridis')
+                plt.colorbar()
+                plt.grid(b=None)
+                plt.savefig(os.path.join('runs', f'fused_channel_{bch}.png'))
+                plt.close()
+
+
         x = self.decoder["backbone"](x)
-        x = self.decoder["neck"](x)
+        if self.decoder_neck_flag is not None : 
+            x = self.decoder["neck"](x)
+
+        visualize_bev = False
+        if visualize_bev :
+            # bs, bev_ch, bev_h, bev_w = x.shape
+            bs, bev_ch, bev_h, bev_w = x[0].shape
+            # bev_feature = x.reshape(bev_ch, bev_h, bev_w).cpu().numpy()
+            bev_feature = x[0].reshape(bev_ch, bev_h, bev_w).cpu().numpy()
+            for bch in range(0, 5) :
+                channel_feature = bev_feature[bch]
+                plt.imshow(channel_feature, cmap='viridis')
+                plt.colorbar()
+                plt.grid(b=None)
+                plt.savefig(os.path.join('runs', f'fused_backbone_channel_{bch}.png'))
+                plt.close()
+
 
         if self.training:
             outputs = {}
@@ -302,4 +424,5 @@ class BEVFusion(Base3DFusionModel):
                         )
                 else:
                     raise ValueError(f"unsupported head: {type}")
+
             return outputs

@@ -4,6 +4,9 @@ from mmdet.core.bbox.match_costs import build_match_cost
 from mmdet.core.bbox.match_costs.builder import MATCH_COST
 from mmdet.core.bbox.iou_calculators import build_iou_calculator
 import torch
+import numpy as np
+
+INFTY_COST = 1e+5
 
 try:
     from scipy.optimize import linear_sum_assignment

@@ -112,7 +112,8 @@ class TransFusionBBoxCoder(BaseBBoxCoder):
                 predictions_dict = {
                     'bboxes': boxes3d,
                     'scores': scores,
-                    'labels': labels
+                    'labels': labels,
+                    'cmask' : cmask
                 }
 
                 predictions_dicts.append(predictions_dict)

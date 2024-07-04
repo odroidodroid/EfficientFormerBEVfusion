@@ -2,17 +2,17 @@ import argparse
 import copy
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"  # specify which GPU(s) to be used
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # specify which GPU(s) to be used
 import warnings
-
+import time
 import mmcv
 import torch
 from torchpack.utils.config import configs
 from torchpack import distributed as dist
-from mmcv import Config, DictAction
+from mmengine import Config, DictAction
 from mmcv.cnn import fuse_conv_bn
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
-from mmcv.runner import get_dist_info, init_dist, load_checkpoint, wrap_fp16_model
+from mmcv.runner import get_dist_info, init_dist, load_checkpoint, wrap_fp16_model, build_optimizer
 from mmdet3d.apis import single_gpu_test
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
@@ -20,11 +20,16 @@ from mmdet.apis import multi_gpu_test, set_random_seed
 from mmdet.datasets import replace_ImageToTensor
 from mmdet3d.utils import recursive_eval
 
+# import debugpy
+# debugpy.listen(1012)
+# print("Wait for debugger...")
+# debugpy.wait_for_client()
+# print("Debugger attached") 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="MMDet test (and eval) a model")
-    parser.add_argument("config", help="test config file path")
-    parser.add_argument("checkpoint", help="checkpoint file")
+    parser.add_argument("config", help="test config file path", default='configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml')
+    parser.add_argument("checkpoint", help="checkpoint file", default='pretrained/bevfusion-det.pth')
     parser.add_argument("--out", help="output result file in pickle format")
     parser.add_argument(
         "--fuse-conv-bn",
@@ -42,10 +47,7 @@ def parse_args():
     parser.add_argument(
         "--eval",
         type=str,
-        nargs="+",
-        help='evaluation metrics, which depends on the dataset, e.g., "bbox",'
-        ' "segm", "proposal" for COCO, and "mAP", "recall" for PASCAL VOC',
-    )
+        default='bbox')
     parser.add_argument("--show", action="store_true", help="show results")
     parser.add_argument("--show-dir", help="directory where results will be saved")
     parser.add_argument(
@@ -133,7 +135,6 @@ def main():
 
     configs.load(args.config, recursive=True)
     cfg = Config(recursive_eval(configs), filename=args.config)
-    print(cfg)
 
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
@@ -180,12 +181,15 @@ def main():
     # build the model and load checkpoint
     cfg.model.train_cfg = None
     model = build_model(cfg.model, test_cfg=cfg.get("test_cfg"))
+    optimizer = build_optimizer(model, cfg.optimizer)
+    #ASP.prune_trained_model(model.cuda(), optimizer)
     fp16_cfg = cfg.get("fp16", None)
     if fp16_cfg is not None:
         wrap_fp16_model(model)
-    checkpoint = load_checkpoint(model, args.checkpoint, map_location="cpu")
+    checkpoint = load_checkpoint(model, args.checkpoint, map_location="cpu", revise_keys=[('student.', '')])
     if args.fuse_conv_bn:
         model = fuse_conv_bn(model)
+        
     # old versions did not save class info in checkpoints, this walkaround is
     # for backward compatibility
     if "CLASSES" in checkpoint.get("meta", {}):

@@ -11,18 +11,22 @@ from torchpack import distributed as dist
 from torchpack.environ import auto_set_run_dir, set_run_dir
 from torchpack.utils.config import configs
 
-from mmdet3d.apis import train_model
+from mmdet3d.apis.train import train_model
 from mmdet3d.datasets import build_dataset
 from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
 
+# import debugpy
+# debugpy.listen(5040)
+# print("Wait for debugger...")
+# debugpy.wait_for_client()
+# print("Debugger attached") 
 
 def main():
     dist.init()
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("config", metavar="FILE", help="config file")
-    parser.add_argument("--run-dir", metavar="DIR", help="run directory")
+    parser.add_argument("config", metavar="FILE", help="config file", default="configs/nuscenes/det/transfusion/pointpillars/lidar/pointpillars.yaml")
+    parser.add_argument("--run-dir", metavar="DIR", help="run directory", default="runs")
     args, opts = parser.parse_known_args()
 
     configs.load(args.config, recursive=True)
@@ -32,7 +36,7 @@ def main():
 
     torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
     torch.cuda.set_device(dist.local_rank())
-
+    
     if args.run_dir is None:
         args.run_dir = auto_set_run_dir()
     else:
@@ -72,13 +76,14 @@ def main():
             cfg["sync_bn"] = dict(exclude=[])
         model = convert_sync_batchnorm(model, exclude=cfg["sync_bn"]["exclude"])
 
+
     logger.info(f"Model:\n{model}")
     train_model(
         model,
         datasets,
         cfg,
-        distributed=True,
-        validate=True,
+        distributed=False,
+        validate=False,
         timestamp=timestamp,
     )
 

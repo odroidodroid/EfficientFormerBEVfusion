@@ -38,3 +38,4 @@ def build_fusion_model(cfg, train_cfg=None, test_cfg=None):
 def build_model(cfg, train_cfg=None, test_cfg=None):
     return build_fusion_model(cfg, train_cfg=train_cfg, test_cfg=test_cfg)
 
+

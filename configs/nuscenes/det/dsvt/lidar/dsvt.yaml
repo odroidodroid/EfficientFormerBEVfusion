@@ -1,0 +1,63 @@
+voxel_size: [0.3, 0.3, 8.0]
+point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+model:
+  encoders:
+    lidar:
+      voxelize:
+        max_num_points: -1
+        point_cloud_range: ${point_cloud_range}
+        voxel_size: ${voxel_size}
+        max_voxels: [90000, 120000]
+      backbone:
+        type: DSVT
+        vfe:
+          num_point_features: 5
+          voxel_size: ${voxel_size}
+          point_cloud_range: ${point_cloud_range}
+          grid_size: [360, 360, 1] # 360
+          with_distance: false
+          use_absolute_xyz: true
+          use_norm: true
+          num_filters: [128,128]
+        input_layer: 
+          sparse_shape: [360, 360, 1] # 360
+          downsample_stride: []
+          d_model: [128]
+          set_info: [[90, 4]]
+          window_shape: [[30, 30, 1]]
+          hybrid_factor: [1, 1, 1]
+          shifts_list: [[[0, 0, 0], [15, 15, 0]]]
+          normalize_pos: false
+        block_name: [DSVTBlock] ## ?
+        set_info: [[90, 4]]
+        d_model: [128]
+        nhead: [8]
+        dim_feedforward: [256]
+        dropout: 0.0
+        activation: gelu
+        output_shape: [360, 360] #360
+        conv_out_channel: 128
+        #pretrained : pretrained/DSVT_Nuscenes_val.pth
+      neck:
+        type: PointPillarScatter3d
+        input_shape: [360,360,1] #360
+        num_bev_features: 128
+  decoder: 
+    backbone:
+      type: BaseBEVResBackbone
+      input_channels: 128
+      layer_nums: [1, 2, 2]
+      layer_strides: [1, 2, 2]
+      num_filters: [128, 128, 256]
+      upsample_strides: [0.5, 1, 2]
+      num_upsample_filters: [128, 128, 128]
+    neck : null
+
+
+data:
+  # test
+  samples_per_gpu: 1 #4
+  workers_per_gpu: 8 #4
+  # train
+  # samples_per_gpu: 8 #4
+  # workers_per_gpu: 8 #4

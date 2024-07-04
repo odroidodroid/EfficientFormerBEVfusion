@@ -37,7 +37,6 @@ class Base3DFusionModel(BaseModule, metaclass=ABCMeta):
                 raise TypeError(f"{loss_name} is not a tensor or list of tensors")
 
         loss = sum(_value for _key, _value in log_vars.items() if "loss" in _key)
-
         log_vars["loss"] = loss
         for loss_name, loss_value in log_vars.items():
             # reduce loss when distributed training
@@ -45,7 +44,6 @@ class Base3DFusionModel(BaseModule, metaclass=ABCMeta):
                 loss_value = loss_value.data.clone()
                 dist.all_reduce(loss_value.div_(dist.get_world_size()))
             log_vars[loss_name] = loss_value.item()
-
         return loss, log_vars
 
     def train_step(self, data, optimizer):
@@ -79,7 +77,6 @@ class Base3DFusionModel(BaseModule, metaclass=ABCMeta):
         loss, log_vars = self._parse_losses(losses)
 
         outputs = dict(loss=loss, log_vars=log_vars, num_samples=len(data["metas"]))
-
         return outputs
 
     def val_step(self, data, optimizer):

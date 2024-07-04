@@ -5,7 +5,7 @@ from mmcv.runner import force_fp32
 from torch import nn
 
 from mmdet3d.models.builder import VTRANSFORMS
-
+# from .latent_rendering import LatentRendering
 from .base import BaseDepthTransform
 
 __all__ = ["DepthLSSTransform"]
@@ -24,6 +24,7 @@ class DepthLSSTransform(BaseDepthTransform):
         zbound: Tuple[float, float, float],
         dbound: Tuple[float, float, float],
         downsample: int = 1,
+        latent_render = False
     ) -> None:
         super().__init__(
             in_channels=in_channels,
@@ -77,6 +78,10 @@ class DepthLSSTransform(BaseDepthTransform):
             )
         else:
             self.downsample = nn.Identity()
+        # if latent_render :
+        #     self.latent_rendering = LatentRendering(embed_dims=out_channels) # ??? 
+        # else :
+        #     self.latent_rendering = None
 
     @force_fp32()
     def get_cam_feats(self, x, d):
@@ -98,5 +103,8 @@ class DepthLSSTransform(BaseDepthTransform):
 
     def forward(self, *args, **kwargs):
         x = super().forward(*args, **kwargs)
+        # latent rendering.. before or after downsample? 
+        # if not isinstance(self.latent_rendering, None):
+        #     x = self.latent_rendering(x.permute(0, 2, 3, 1)) # bs, bev_h, bev_w, embed_dim
         x = self.downsample(x)
         return x

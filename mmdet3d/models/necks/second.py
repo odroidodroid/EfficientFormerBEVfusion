@@ -4,7 +4,7 @@ import torch
 from mmcv.cnn import build_conv_layer, build_norm_layer, build_upsample_layer
 from mmcv.runner import BaseModule, auto_fp16
 from torch import nn as nn
-
+import time
 from mmdet.models import NECKS
 
 __all__ = ["SECONDFPN"]
@@ -89,6 +89,7 @@ class SECONDFPN(BaseModule):
         Returns:
             list[torch.Tensor]: Multi-level feature maps.
         """
+        sec_t1 = time.time()
         assert len(x) == len(self.in_channels)
         ups = [deblock(x[i]) for i, deblock in enumerate(self.deblocks)]
 
@@ -96,4 +97,6 @@ class SECONDFPN(BaseModule):
             out = torch.cat(ups, dim=1)
         else:
             out = ups[0]
+        sec_t2 = time.time() - sec_t1
+        #print(" Time | second neck : {:.2f}".format(sec_t2))
         return [out]

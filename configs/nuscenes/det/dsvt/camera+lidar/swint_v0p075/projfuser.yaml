@@ -1,0 +1,43 @@
+model:
+  encoders:
+    camera:
+      backbone:
+        type: SwinTransformer
+        embed_dims: 96
+        depths: [2, 2, 6, 2]
+        num_heads: [3, 6, 12, 24]
+        window_size: 7
+        mlp_ratio: 4
+        qkv_bias: true
+        qk_scale: null
+        drop_rate: 0.
+        attn_drop_rate: 0.
+        drop_path_rate: 0.2
+        patch_norm: true
+        out_indices: [0, 1, 2, 3]
+        with_cp: false
+        convert_weights: true
+        init_cfg:
+          type: Pretrained
+          checkpoint: /home/youngjin/projects/bevfusion/pretrained/swint-nuimages-pretrained.pth
+      neck:
+        type: FPN
+        in_channels: [96, 192, 384, 768]
+        out_channels: 256
+        start_level: 0
+        num_outs: 4
+        norm_cfg:
+          type: BN2d
+          requires_grad: true
+        act_cfg:
+          type: ReLU
+          inplace: true
+        upsample_cfg:
+          mode: bilinear
+          align_corners: false
+
+  fuser:
+    type: ProjFuser
+    in_channels: [80, 256]
+    out_channels: 256
+

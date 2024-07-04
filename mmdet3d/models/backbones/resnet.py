@@ -3,7 +3,8 @@ from typing import List, Tuple
 import torch
 from mmcv.cnn.resnet import BasicBlock, make_res_layer
 from torch import nn
-
+import onnx
+from onnx2pytorch import ConvertModel
 from mmdet.models import BACKBONES
 
 __all__ = ["GeneralizedResNet"]

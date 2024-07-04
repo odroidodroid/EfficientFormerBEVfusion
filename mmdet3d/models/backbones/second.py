@@ -4,7 +4,7 @@ import warnings
 from mmcv.cnn import build_conv_layer, build_norm_layer
 from mmcv.runner import BaseModule
 from torch import nn as nn
-
+import time
 from mmdet.models import BACKBONES
 
 __all__ = ["SECOND"]
@@ -82,6 +82,7 @@ class SECOND(BaseModule):
             self.init_cfg = dict(type="Kaiming", layer="Conv2d")
 
     def forward(self, x):
+        sec_t1 = time.time()
         """Forward function.
 
         Args:
@@ -94,4 +95,6 @@ class SECOND(BaseModule):
         for i in range(len(self.blocks)):
             x = self.blocks[i](x)
             outs.append(x)
+        sec_t2 = time.time() - sec_t1
+        #print(" Time | second backbone : {:.2f}".format(sec_t2))
         return tuple(outs)
