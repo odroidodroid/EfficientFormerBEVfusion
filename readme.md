@@ -1,5 +1,5 @@
 ## Version Info
-torch : 1.13.0
+torch : 1.13.0 \\
 numpy : 1.23.4
 mmcv : 1.4.0 (MMCV\_WITH\_OPS=1)
 mmengine : 0.9.0
