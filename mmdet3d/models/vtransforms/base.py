@@ -6,6 +6,12 @@ from torch import nn
 
 from mmdet3d.ops import bev_pool
 
+import matplotlib.pyplot as plt
+import numpy as np
+
+mean = [0.485, 0.456, 0.406]
+std = [0.229, 0.224, 0.225]
+
 __all__ = ["BaseTransform", "BaseDepthTransform"]
 
 
@@ -276,6 +282,19 @@ class BaseDepthTransform(BaseTransform):
                 masked_coords = cur_coords[c, on_img[c]].long()
                 masked_dist = dist[c, on_img[c]]
                 depth[b, c, 0, masked_coords[:, 0], masked_coords[:, 1]] = masked_dist
+
+                # x = masked_coords[:, 0].cpu().detach().numpy()
+                # y = masked_coords[:, 1].cpu().detach().numpy()
+                # z = masked_dist.cpu().detach().numpy()
+                # z = z.astype(np.uint8)
+                # img_denorm = img[0,c].permute(1,2,0).cpu().detach().numpy() * np.array(std)
+                # img_denorm += np.array(mean)
+                # img_denorm *= 255
+                # plt.imshow(img_denorm.astype(np.uint8))
+                # plt.axis('off')
+                # plt.scatter(y, x, c=z, cmap='rainbow_r', alpha=0.1, s=0.1)
+                # plt.savefig('runs/mapeed_pointcloud_ch{}'.format(c))
+
 
         extra_rots = lidar_aug_matrix[..., :3, :3]
         extra_trans = lidar_aug_matrix[..., :3, 3]

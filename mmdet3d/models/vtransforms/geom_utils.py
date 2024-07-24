@@ -236,7 +236,7 @@ def _get_direction_of_each_query_points(points, origin=0.5):
 
 
 import torch
-import basic_utils
+from . import basic_utils
 
 import numpy as np
 

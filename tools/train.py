@@ -17,7 +17,7 @@ from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
 
 # import debugpy
-# debugpy.listen(5040)
+# debugpy.listen(7575)
 # print("Wait for debugger...")
 # debugpy.wait_for_client()
 # print("Debugger attached") 

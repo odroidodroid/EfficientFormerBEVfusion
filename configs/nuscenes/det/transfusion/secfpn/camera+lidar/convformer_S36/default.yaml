@@ -12,8 +12,15 @@ model:
       neck:
         in_channels: [128, 320, 512]
       vtransform:
+        in_channels: 256
+        out_channels: 80
+        image_size: ${image_size}
+        feature_size: ${[image_size[0] // 8, image_size[1] // 8]}
         xbound: [-54.0, 54.0, 0.3]
         ybound: [-54.0, 54.0, 0.3]
+        zbound: [-10.0, 10.0, 20.0]
+        dbound: [1.0, 60.0, 0.5]
+        downsample: 2
     lidar:
       voxelize:
         point_cloud_range: ${point_cloud_range}

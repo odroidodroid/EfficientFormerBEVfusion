@@ -98,9 +98,10 @@ class BEVFusion(Base3DFusionModel):
 
     def init_weights(self) -> None:
         if "camera" in self.encoders:
+            pass
             # self.encoders["camera"]["backbone"].init_weights()
-            pretrained = self.encoders["camera"]["backbone"].init_cfg.checkpoint
-            self.load_ckpt_internimage(pretrained)
+            # pretrained = self.encoders["camera"]["backbone"].init_cfg.checkpoint
+            # self.load_ckpt_internimage(pretrained)
         else :
             train_dsvt = False
             if train_dsvt :
@@ -160,6 +161,7 @@ class BEVFusion(Base3DFusionModel):
         img_metas,
     ) -> torch.Tensor:
         B, N, C, H, W = x.size()
+        img = x
         x = x.view(B * N, C, H, W)
         x = self.encoders["camera"]["backbone"](x)
         x = self.encoders["camera"]["neck"](x)
@@ -329,7 +331,7 @@ class BEVFusion(Base3DFusionModel):
             visualize_bev = False
             if visualize_bev :
                 bs, bev_ch, bev_h, bev_w = feature.shape
-                bev_feature = feature.reshape(bev_ch, bev_h, bev_w).cpu().numpy()
+                bev_feature = feature[0].reshape(bev_ch, bev_h, bev_w).detach().cpu().numpy()
                 for bch in range(0, 5) :
                     channel_feature = bev_feature[bch]
                     plt.imshow(channel_feature, cmap='viridis')
@@ -348,13 +350,12 @@ class BEVFusion(Base3DFusionModel):
         else:
             assert len(features) == 1, features
             x = features[0]
-
         batch_size = x.shape[0]
 
         visualize_bev = False
         if visualize_bev :
             bs, bev_ch, bev_h, bev_w = x.shape
-            bev_feature = x.reshape(bev_ch, bev_h, bev_w).cpu().numpy()
+            bev_feature = x[0].reshape(bev_ch, bev_h, bev_w).cpu().detach().numpy()
             for bch in range(0, 5) :
                 channel_feature = bev_feature[bch]
                 plt.imshow(channel_feature, cmap='viridis')
@@ -373,7 +374,7 @@ class BEVFusion(Base3DFusionModel):
             # bs, bev_ch, bev_h, bev_w = x.shape
             bs, bev_ch, bev_h, bev_w = x[0].shape
             # bev_feature = x.reshape(bev_ch, bev_h, bev_w).cpu().numpy()
-            bev_feature = x[0].reshape(bev_ch, bev_h, bev_w).cpu().numpy()
+            bev_feature = x[0][0].reshape(bev_ch, bev_h, bev_w).cpu().detach().numpy()
             for bch in range(0, 5) :
                 channel_feature = bev_feature[bch]
                 plt.imshow(channel_feature, cmap='viridis')

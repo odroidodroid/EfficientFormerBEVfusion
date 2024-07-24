@@ -6,7 +6,7 @@ import numpy as np
 from mmdet3d.models.builder import FUSERS
 #from ops.deform_attn import deform_attn
 from pyquaternion import Quaternion
-
+from .kmeans import closest_centroid
 __all__ = ["ProjFuser"]
 
 
@@ -28,8 +28,6 @@ class ProjFuser(nn.Module):
         self.img_w = img_w
         self.ego2lid2img = torch.matmul(lid2img, ego2lid)
 
-        
-        img2lidar = self.img2lid
         # 1. transform pcd to ego vehicle, 2. transform from ego to global, 3. transform from global into ego frame of image         
         lidar2img = self.ego2lid2img[:, :(T*N), None, None, :, :] 
         lidar2img = lidar2img.expand()
@@ -40,8 +38,16 @@ class ProjFuser(nn.Module):
         points = points.expand()
         points = points.transpose()
         
-        proj_points = torch.matmul(lidar2img, points).squeeze(-1) # lidar to image projection
-        proj_points = deform_attn(proj_points, img_feat) # fuse, more layer ?
+        proj_points = torch.matmul(lidar2img, points).squeeze(-1) # lidar to image projection        
+        fixed_centroids = proj_points
         
-        fused_points = torch.matmul(img2lidar, proj_points) # lidar image projection to lidar
-        return fused_points
+        # get clusters of img_feat centered by projected lidar points
+        img_feat_clustered = closest_centroid(img_feat, fixed_centroids)
+        
+        # designate centroid's lidar depth to clusters
+
+        # img_feat with depths to 3D pointclouds
+        
+        # 3D pointclouds to BEV
+
+        return img_feat_clustered
