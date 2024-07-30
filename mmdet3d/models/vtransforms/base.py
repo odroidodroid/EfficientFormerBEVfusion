@@ -212,6 +212,12 @@ class BaseTransform(nn.Module):
 
 
 class BaseDepthTransform(BaseTransform):
+    # def create_depthmap_grid(self, depthmap, cam_type) :
+    #     B, C, _, H, W = depthmap.shape
+    #     voxel_size = (H//16, W//16)
+    #     x_grid = torch.linspace(0.0, W-1, )
+        
+        
     @force_fp32()
     def forward(
         self,
@@ -278,11 +284,13 @@ class BaseDepthTransform(BaseTransform):
                 & (cur_coords[..., 1] < self.image_size[1])
                 & (cur_coords[..., 1] >= 0)
             )
+            all_points = []
             for c in range(on_img.shape[0]):
                 masked_coords = cur_coords[c, on_img[c]].long()
                 masked_dist = dist[c, on_img[c]]
                 depth[b, c, 0, masked_coords[:, 0], masked_coords[:, 1]] = masked_dist
 
+                # lidar to image projection
                 # x = masked_coords[:, 0].cpu().detach().numpy()
                 # y = masked_coords[:, 1].cpu().detach().numpy()
                 # z = masked_dist.cpu().detach().numpy()
@@ -294,7 +302,37 @@ class BaseDepthTransform(BaseTransform):
                 # plt.axis('off')
                 # plt.scatter(y, x, c=z, cmap='rainbow_r', alpha=0.1, s=0.1)
                 # plt.savefig('runs/mapeed_pointcloud_ch{}'.format(c))
-
+                
+                # depth to lidar unprojection
+            #     intrins_np = cam_intrinsic.cpu().detach().numpy()[b,c]
+            #     lidar2camera_np = lidar2camera.cpu().detach().numpy()[b,c]
+            #     u_flat = x.flatten()
+            #     v_flat = y.flatten()
+            #     depth_flat = z.flatten()
+                                
+            #     x_cam = (u_flat - intrins_np[0,2]) * depth_flat / intrins_np[0,0]
+            #     y_cam = (v_flat - intrins_np[1,2]) * depth_flat / intrins_np[1,1]
+            #     z_cam = depth_flat
+                
+            #     recon_cam_points = np.vstack((x_cam, y_cam, z_cam))
+            #     T_inv = np.linalg.inv(lidar2camera_np)
+            #     lid_recon_homo = T_inv @ np.vstack((recon_cam_points, np.ones((1, recon_cam_points.shape[1]))))
+            #     lid_recon = lid_recon_homo[:3,:]
+                
+            #     lid_recon_t = torch.from_numpy(lid_recon).to(device='cuda')
+            #     all_points.append(lid_recon_t)
+            # all_points = torch.cat(all_points, dim=1).float().to(device='cuda')
+            # points_c = points[b].permute(1,0)[:3,:][:,:all_points.shape[1]].float()
+            # are_close = torch.allclose(all_points, points_c, atol=1e-5)
+            # xdiff = torch.abs(all_points[0] - points_c[0])
+            # ydiff = torch.abs(all_points[1] - points_c[1])
+            # zdiff = torch.abs(all_points[2] - points_c[2])
+            # xmean_diff = torch.mean(xdiff)
+            # xmax_diff = torch.max(xdiff)
+            # ymean_diff = torch.mean(ydiff)
+            # ymax_diff = torch.max(ydiff)
+            # zmean_diff = torch.mean(zdiff)
+            # zmax_diff = torch.max(zdiff)
 
         extra_rots = lidar_aug_matrix[..., :3, :3]
         extra_trans = lidar_aug_matrix[..., :3, 3]

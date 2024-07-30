@@ -244,6 +244,15 @@ def eye_4x4(B, device='cuda'):
     rt = torch.eye(4, device=torch.device(device)).view(1,4,4).repeat([B, 1, 1])
     return rt
 
+def safe_inverse_N(a) :
+    B, S, _, _ = list(a.shape)
+    inv = a.clone()
+    r_transpose = a[:, :, :3, :3].transpose(2,3)
+    inv[:, :, :3, :3] = r_transpose
+    inv[:, :, :3, 3:4] = -torch.matmul(r_transpose, a[:, :, :3, 3:4])
+
+    return inv
+
 def safe_inverse(a): #parallel version
     B, _, _ = list(a.shape)
     inv = a.clone()

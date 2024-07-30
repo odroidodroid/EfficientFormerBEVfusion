@@ -10,3 +10,7 @@ class CustomEpochBasedRunner(EpochBasedRunner):
         for dataset in self._dataset:
             dataset.set_epoch(self.epoch)
         super().train(data_loader, **kwargs)
+@RUNNERS.register_module()
+class CustomEpochBasedRunner2(EpochBasedRunner):
+    def train(self, data_loader, **kwargs):
+        super().train(data_loader, **kwargs)

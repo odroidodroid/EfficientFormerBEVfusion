@@ -16,8 +16,8 @@ from mmdet3d.runner import CustomEpochBasedRunner
 from mmdet3d.utils import get_root_logger
 from mmdet.core import DistEvalHook
 from mmdet.datasets import build_dataloader, build_dataset, replace_ImageToTensor
-
-
+from mmdet3d.datasets.viz_data import compile_data
+import numpy as np
 def train_model(
     model,
     dataset,
@@ -42,7 +42,62 @@ def train_model(
         )
         for ds in dataset
     ]
+    
+    # final_dim = (int(224 * 2), int(400 * 2))
+    # print('resolution:', final_dim)
 
+    # if True:
+    #     resize_lim = [0.8,1.2]
+    #     crop_offset = int(final_dim[0]*(1-resize_lim[0]))
+    # else:
+    #     resize_lim = [1.0,1.0]
+    #     crop_offset = 0
+    
+    # data_aug_conf = {
+    #     'crop_offset': crop_offset,
+    #     'resize_lim': resize_lim,
+    #     'final_dim': final_dim,
+    #     'H': 900, 'W': 1600,
+    #     'cams': ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
+    #              'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT'],
+    #     'ncams': 6,
+    # }
+    # scene_centroid_x = 0.0
+    # scene_centroid_y = 1.0 # down 1 meter
+    # scene_centroid_z = 0.0
+
+    # scene_centroid_py = np.array([scene_centroid_x,
+    #                             scene_centroid_y,
+    #                             scene_centroid_z]).reshape([1, 3])
+    # scene_centroid = torch.from_numpy(scene_centroid_py).float()
+
+    # XMIN, XMAX = -54, 54
+    # ZMIN, ZMAX = -54, 54
+    # YMIN, YMAX = -5, 3
+    # bounds = (XMIN, XMAX, YMIN, YMAX, ZMIN, ZMAX)
+
+    # Z, Y, X = 180, 8, 180
+
+    # train_dataloader, val_dataloader = compile_data(
+    #     'trainval',
+    #     '/home/youngjin/datasets/nuscenes/',
+    #     data_aug_conf=data_aug_conf,
+    #     centroid=scene_centroid_py,
+    #     bounds=bounds,
+    #     res_3d=(Z,Y,X),
+    #     bsz=4,
+    #     nworkers=4,
+    #     shuffle=True,
+    #     use_radar_filters=False,
+    #     seqlen=1, # we do not load a temporal sequence here, but that can work with this dataloader
+    #     nsweeps=3,
+    #     do_shuffle_cams=True,
+    #     get_tids=True,
+    # )
+    # train_iterloader = iter(train_dataloader)
+    # val_iterloader = iter(val_dataloader)
+
+    
     # put model on gpus
     find_unused_parameters = cfg.get("find_unused_parameters", True)
     # Sets the `find_unused_parameters` parameter in

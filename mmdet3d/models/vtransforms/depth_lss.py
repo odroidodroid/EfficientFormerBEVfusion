@@ -91,6 +91,13 @@ class DepthLSSTransform(BaseDepthTransform):
         d = d.view(B * N, *d.shape[2:])
         x = x.view(B * N, C, fH, fW)
 
+        # depth_p = d[0].permute(1,2,0)
+        # max_depth, _ = torch.max(depth_p, dim=2)
+        # max_height_ind, max_width_ind = torch.where(max_depth == max_depth.max())
+        # hh = max_height_ind.item()
+        # ww = max_width_ind.item()
+        # print("depth : {}".format(depth_p[hh,ww,:]))
+
         d = self.dtransform(d)
         x = torch.cat([d, x], dim=1)
         x = self.depthnet(x)

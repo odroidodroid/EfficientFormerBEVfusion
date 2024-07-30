@@ -7,7 +7,7 @@ from mmdet3d.models.builder import VTRANSFORMS
 from .geom_utils import *
 from .basic_utils import *
 from .vox_utils import *
-
+from mmcv.runner import auto_fp16, force_fp32
 from .latent_rendering import LatentRendering
 __all__ = ["SimpleBEV"]
 @VTRANSFORMS.register_module()
@@ -84,36 +84,28 @@ class SimpleBEV(nn.Module) :
             )
         else:
             if self.do_rgbcompress:
+                # self.bev_compressor = nn.Sequential(
+                #     nn.Conv2d(feat2d_dim*self.Y, feat2d_dim, kernel_size=3, padding=1, stride=1, bias=False),
+                #     nn.InstanceNorm2d(latent_dim),
+                #     nn.GELU(),
+                # )
                 self.bev_compressor = nn.Sequential(
-                    nn.Conv2d(feat2d_dim*self.Y, feat2d_dim, kernel_size=3, padding=1, stride=1, bias=False),
-                    nn.InstanceNorm2d(latent_dim),
+                    nn.Conv2d(feat2d_dim*self.Y, 80, kernel_size=3, padding=1, stride=1, bias=False),
+                    nn.InstanceNorm2d(80),
                     nn.GELU(),
                 )
             else:
                 # use simple sum
                 pass
 
-        # Decoder
-        # self.decoder = Decoder(
-        #     in_channels=latent_dim,
-        #     n_classes=1,
-        #     predict_future_flow=False
-        # )
-
-        # Weights
-        self.ce_weight = nn.Parameter(torch.tensor(0.0), requires_grad=True)
-        self.center_weight = nn.Parameter(torch.tensor(0.0), requires_grad=True)
-        self.offset_weight = nn.Parameter(torch.tensor(0.0), requires_grad=True)
-            
-        # set_bn_momentum(self, 0.1)
         self.vox_utils = Vox_util(self.Z, self.Y, self.X,
                                         scene_centroid=scene_centroid,
                                         bounds=bounds,
                                         assert_cube=False)
         self.xyz_memA = basic_utils.gridcloud3d(1, self.Z, self.Y, self.X, norm=False)
         self.xyz_camA = self.vox_utils.Mem2Ref(self.xyz_memA, self.Z, self.Y, self.X, assert_cube=False)
-        
-    def forward(self, cam_feat, points, camera2ego, lidar2ego, lidar2camera, lidar2image, cam_intrinsic, camera2lidar, img_aug_matrix, lidar_aug_matrix, img_metas):
+    @force_fp32()
+    def forward(self, cam_feat, points, camera2ego, lidar2ego, lidar2camera, lidar2image, cam_intrinsic, camera2lidar, img_aug_matrix, lidar_aug_matrix, img_metas,**kwargs):
         '''
         B = batch size, S = number of cameras, C = 3, H = img height, W = img width
         rgb_camXs: (B,S,C,H,W)
@@ -131,14 +123,15 @@ class SimpleBEV(nn.Module) :
         # cam0_T_camXs : ????
         # rad_occ_mem0=None
 
-        rots = camera2ego[..., :3, :3]
-        trans = camera2ego[..., :3, 3]
-        intrins = cam_intrinsic[..., :3, :3]
-        camera2lidar_rots = camera2lidar[..., :3, :3]
-        camera2lidar_trans = camera2lidar[..., :3, 3]
-        
-        velo_T_cams = merge_rtlist(rots, trans)
-        cam0_T_camXs_ = get_camM_T_camXs(velo_T_cams, ind=0)
+        # rots = camera2ego[..., :3, :3]
+        # trans = camera2ego[..., :3, 3]
+        # intrins = cam_intrinsic[..., :3, :3]
+        # camera2lidar_rots = camera2lidar[..., :3, :3]
+        # camera2lidar_trans = camera2lidar[..., :3, 3]
+
+        rots = kwargs['sim_rots'].data[0].cuda()
+        trans = kwargs['sim_trans'].data[0].cuda()
+        intrins = kwargs['sim_intrins'].data[0].cuda()
         
         B, S, C, _, _ = cam_feat.shape
         H, W = self.image_size
@@ -147,14 +140,18 @@ class SimpleBEV(nn.Module) :
         __p = lambda x: basic_utils.pack_seqdim(x, B)
         __u = lambda x: basic_utils.unpack_seqdim(x, B)
         feat_camXs_ = __p(cam_feat)
-        pix_T_cams_ = __p(cam_intrinsic) ## 
+        pix_T_cams_ = __p(intrins) ## 
+
+        velo_T_cams = merge_rtlist(rots, trans) # sensor2ego
+        cam0_T_camXs_ = get_camM_T_camXs(velo_T_cams, ind=0)
+
         cam0_T_camXs_ = __p(cam0_T_camXs_) ## 
         camXs_T_cam0_ = safe_inverse(cam0_T_camXs_)
 
         _, C, Hf, Wf = feat_camXs_.shape
 
-        sy = (Hf/float(H)) * 0.284
-        sx = (Wf/float(W)) * 0.44
+        sy = (Hf/float(H))
+        sx = (Wf/float(W))
         Z, Y, X = self.Z, self.Y, self.X
 
         # unproject image feature to 3d grid
@@ -163,16 +160,16 @@ class SimpleBEV(nn.Module) :
             xyz_camA = self.xyz_camA.to(feat_camXs_.device).repeat(B*S,1,1) ## 
         else:
             xyz_camA = None
+        featpix_T_cam0 = matmul2(featpix_T_cams_, camXs_T_cam0_)
         feat_mems_ = self.vox_utils.unproject_image_to_mem(
             feat_camXs_,
-            matmul2(featpix_T_cams_, camXs_T_cam0_),
+            featpix_T_cam0,
             camXs_T_cam0_, Z, Y, X,
             xyz_camA=xyz_camA)
         feat_mems = __u(feat_mems_) # B, S, C, Z, Y, X
 
         mask_mems = (torch.abs(feat_mems) > 0).float()
         feat_mem = reduce_masked_mean(feat_mems, mask_mems, dim=1) # B, C, Z, Y, X
-
         if self.do_rgbcompress:
             feat_bev_ = feat_mem.permute(0, 1, 3, 2, 4).reshape(B, self.feat2d_dim*Y, Z, X)
             feat_bev = self.bev_compressor(feat_bev_)

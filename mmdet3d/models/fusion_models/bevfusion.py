@@ -158,7 +158,7 @@ class BEVFusion(Base3DFusionModel):
         camera2lidar,
         img_aug_matrix,
         lidar_aug_matrix,
-        img_metas,
+        img_metas,**kwargs
     ) -> torch.Tensor:
         B, N, C, H, W = x.size()
         img = x
@@ -183,7 +183,7 @@ class BEVFusion(Base3DFusionModel):
             camera2lidar,
             img_aug_matrix,
             lidar_aug_matrix,
-            img_metas,
+            img_metas,**kwargs
         )
         return x
 
@@ -321,7 +321,7 @@ class BEVFusion(Base3DFusionModel):
                     camera2lidar,
                     img_aug_matrix,
                     lidar_aug_matrix,
-                    metas,
+                    metas,**kwargs
                 )
             elif sensor == "lidar":
                 feature = self.extract_lidar_features(points)

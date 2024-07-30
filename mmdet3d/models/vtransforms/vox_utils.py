@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from .geom_utils import *
 from .basic_utils import *
-
+from mmcv.runner import auto_fp16, force_fp32
 class Vox_util(object):
     def __init__(self, Z, Y, X, scene_centroid, bounds, pad=None, assert_cube=False):
         self.XMIN, self.XMAX, self.YMIN, self.YMAX, self.ZMIN, self.ZMAX = bounds
@@ -304,12 +304,12 @@ class Vox_util(object):
             xyz_memA = gridcloud3d(B, Z, Y, X, norm=False, device=pixB_T_camA.device)
             xyz_camA = self.Mem2Ref(xyz_memA, Z, Y, X, assert_cube=assert_cube)
 
-        xyz_camB = apply_4x4(camB_T_camA, xyz_camA)
+        xyz_camB = apply_4x4(camB_T_camA, xyz_camA).float()
         z = xyz_camB[:,:,2]
-
-        xyz_pixB = apply_4x4(pixB_T_camA, xyz_camA)
+        
+        xyz_pixB = apply_4x4(pixB_T_camA, xyz_camA).float()
         normalizer = torch.unsqueeze(xyz_pixB[:,:,2], 2)
-        EPS=1e-6
+        EPS=1e-5
         # z = xyz_pixB[:,:,2]
         xy_pixB = xyz_pixB[:,:,:2]/torch.clamp(normalizer, min=EPS)
         # this is B x N x 2

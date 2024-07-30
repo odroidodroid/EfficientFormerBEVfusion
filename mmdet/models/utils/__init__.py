@@ -16,7 +16,8 @@ from .se_layer import SELayer
 from .transformer import (DetrTransformerDecoder, DetrTransformerDecoderLayer,
                           DynamicConv, PatchEmbed, Transformer, nchw_to_nlc,
                           nlc_to_nchw)
-
+from .layer_decay_optimizer_constructor import LayerDecayOptimizerConstructor
+from .fp16_compression_hook import Fp16CompresssionHook
 __all__ = [
     'ResLayer', 'gaussian_radius', 'gen_gaussian_target',
     'DetrTransformerDecoderLayer', 'DetrTransformerDecoder', 'Transformer',
@@ -25,5 +26,5 @@ __all__ = [
     'NormedLinear', 'NormedConv2d', 'make_divisible', 'InvertedResidual',
     'SELayer', 'interpolate_as', 'ConvUpsample', 'CSPLayer',
     'adaptive_avg_pool2d', 'AdaptiveAvgPool2d', 'PatchEmbed', 'nchw_to_nlc',
-    'nlc_to_nchw', 'pvt_convert'
+    'nlc_to_nchw', 'pvt_convert','LayerDecayOptimizerConstructor', 'Fp16CompresssionHook'
 ]

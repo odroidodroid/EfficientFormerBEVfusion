@@ -1,4 +1,4 @@
-dataset_type: NuScenesDataset
+dataset_type: NuScenesDataset2
 dataset_root: /home/youngjin/datasets/nuscenes/
 gt_paste_stop_epoch: -1
 reduce_beams: 32
@@ -183,6 +183,10 @@ train_pipeline:
       - lidar2image
       - img_aug_matrix
       - lidar_aug_matrix
+      - sim_imgs
+      - sim_rots
+      - sim_trans
+      - sim_intrins
 
 test_pipeline:
   -
@@ -256,7 +260,10 @@ test_pipeline:
       - lidar2image
       - img_aug_matrix
       - lidar_aug_matrix
-
+      - sim_imgs
+      - sim_rots
+      - sim_trans
+      - sim_intrins
 data:
   samples_per_gpu: 4 #4
   workers_per_gpu: 4 #4

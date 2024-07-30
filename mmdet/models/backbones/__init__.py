@@ -18,9 +18,10 @@ from .trident_resnet import TridentResNet
 from .efficientformer import EfficientFormer
 from .depthwise_resnet import Depthwise_ResNet
 from .intern_image import InternImage
+from .vit import ViT
 __all__ = [
     'RegNet', 'ResNet','Depthwise_ResNet', 'ResNetV1d', 'ResNeXt', 'SSDVGG', 'HRNet',
     'MobileNetV2', 'Res2Net', 'HourglassNet', 'DetectoRS_ResNet',
     'DetectoRS_ResNeXt', 'Darknet', 'ResNeSt', 'TridentResNet', 'CSPDarknet',
-    'SwinTransformer', 'PyramidVisionTransformer', 'PyramidVisionTransformerV2', 'EfficientFormer', 'InternImage'
+    'SwinTransformer', 'PyramidVisionTransformer', 'PyramidVisionTransformerV2', 'EfficientFormer', 'InternImage','ViT'
 ]

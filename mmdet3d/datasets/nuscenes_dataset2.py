@@ -13,10 +13,21 @@ from mmdet.datasets import DATASETS
 
 from ..core.bbox import LiDARInstance3DBoxes
 from .custom_3d import Custom3DDataset
-
+from mmdet3d.models.vtransforms import geom_utils
+import os
+from PIL import Image
+from nuscenes.nuscenes import NuScenes
+import torchvision
+def img_transform(img, resize_dims, crop):
+    img = img.resize(resize_dims, Image.NEAREST)
+    img = img.crop(crop)
+    return img
+totorch_img = torchvision.transforms.Compose((
+    torchvision.transforms.ToTensor(),
+))
 
 @DATASETS.register_module()
-class NuScenesDataset(Custom3DDataset):
+class NuScenesDataset2(Custom3DDataset):
     r"""NuScenes Dataset.
 
     This class serves as the API for experiments on the NuScenes Dataset.
@@ -165,7 +176,11 @@ class NuScenesDataset(Custom3DDataset):
                 use_map=False,
                 use_external=False,
             )
-
+        self.dataroot = dataset_root
+        self.test_mode = test_mode
+        self.nusc = NuScenes(version='v1.0-trainval',
+                        dataroot=dataset_root,
+                        verbose=False)
     def get_cat_ids(self, idx):
         """Get category distribution of single scene.
 
@@ -206,7 +221,7 @@ class NuScenesDataset(Custom3DDataset):
         self.version = self.metadata["version"]
         return data_infos
 
-    def get_data_info(self, index: int) -> Dict[str, Any]:
+    def _get_data_info(self, index: int) -> Dict[str, Any]:
         info = self.data_infos[index]
 
         data = dict(
@@ -276,6 +291,81 @@ class NuScenesDataset(Custom3DDataset):
         data["ann_info"] = annos
         return data
 
+    def get_data_info(self, index: int) -> Dict[str, Any]:
+        info = self.data_infos[index]
+        data = dict(
+            token=info["token"],
+            sample_idx=info['token'],
+            lidar_path=info["lidar_path"],
+            sweeps=info["sweeps"],
+            timestamp=info["timestamp"],
+            location=info["location"],
+        )
+        # add simple bev data and params
+        imgs, rots, trans, intrins = self.get_image_data(info['token'], info['timestamp'])
+        data['sim_imgs'] = imgs
+        data['sim_rots'] = rots
+        data['sim_trans'] = trans
+        data['sim_intrins'] = intrins
+        # ego to global transform
+        ego2global = np.eye(4).astype(np.float32)
+        ego2global[:3, :3] = Quaternion(info["ego2global_rotation"]).rotation_matrix
+        ego2global[:3, 3] = info["ego2global_translation"]
+        data["ego2global"] = ego2global
+
+        # lidar to ego transform
+        lidar2ego = np.eye(4).astype(np.float32)
+        lidar2ego[:3, :3] = Quaternion(info["lidar2ego_rotation"]).rotation_matrix
+        lidar2ego[:3, 3] = info["lidar2ego_translation"]
+        data["lidar2ego"] = lidar2ego
+
+        if self.modality["use_camera"]:
+            data["image_paths"] = []
+            data["lidar2camera"] = []
+            data["lidar2image"] = []
+            data["camera2ego"] = []
+            data["camera_intrinsics"] = []
+            data["camera2lidar"] = []
+
+            for _, camera_info in info["cams"].items():
+                data["image_paths"].append(camera_info["data_path"])
+
+                # lidar to camera transform
+                lidar2camera_r = np.linalg.inv(camera_info["sensor2lidar_rotation"])
+                lidar2camera_t = (
+                    camera_info["sensor2lidar_translation"] @ lidar2camera_r.T
+                )
+                lidar2camera_rt = np.eye(4).astype(np.float32)
+                lidar2camera_rt[:3, :3] = lidar2camera_r.T
+                lidar2camera_rt[3, :3] = -lidar2camera_t
+                data["lidar2camera"].append(lidar2camera_rt.T)
+
+                # camera intrinsics
+                camera_intrinsics = np.eye(4).astype(np.float32)
+                camera_intrinsics[:3, :3] = camera_info["camera_intrinsics"]
+                data["camera_intrinsics"].append(camera_intrinsics)
+
+                # lidar to image transform
+                lidar2image = camera_intrinsics @ lidar2camera_rt.T
+                data["lidar2image"].append(lidar2image)
+
+                # camera to ego transform
+                camera2ego = np.eye(4).astype(np.float32)
+                camera2ego[:3, :3] = Quaternion(camera_info["sensor2ego_rotation"]).rotation_matrix
+                camera2ego[:3, 3] = camera_info["sensor2ego_translation"]
+                data["camera2ego"].append(camera2ego)
+
+                # camera to lidar transform
+                camera2lidar = np.eye(4).astype(np.float32)
+                camera2lidar[:3, :3] = camera_info["sensor2lidar_rotation"]
+                camera2lidar[:3, 3] = camera_info["sensor2lidar_translation"]
+                data["camera2lidar"].append(camera2lidar)
+
+        annos = self.get_ann_info(index)
+        data["ann_info"] = annos
+        return data
+
+
     def get_ann_info(self, index):
         """Get annotation info according to the given index.
 
@@ -326,6 +416,99 @@ class NuScenesDataset(Custom3DDataset):
         )
         return anns_results
 
+    def sample_augmentation(self):
+        final_dim = (256, 704)
+
+        resize_lim = [0.8,1.2]
+        crop_offset = int(final_dim[0]*(1-resize_lim[0]))
+
+        self.data_aug_conf = {
+            'crop_offset': crop_offset,
+            'resize_lim': resize_lim,
+            'final_dim': final_dim,
+            'H': 900, 'W': 1600,
+            'cams': ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
+                     'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT'],
+            'ncams': 6,
+        }
+        fH, fW = self.data_aug_conf['final_dim']
+        if not self.test_mode:
+            if 'resize_lim' in self.data_aug_conf and self.data_aug_conf['resize_lim'] is not None:
+                resize = np.random.uniform(*self.data_aug_conf['resize_lim'])
+            else:
+                resize = self.data_aug_conf['resize_scale']
+
+            resize_dims = (int(fW*resize), int(fH*resize))
+
+            newW, newH = resize_dims
+
+            # center it
+            crop_h = int((newH - fH)/2)
+            crop_w = int((newW - fW)/2)
+
+            crop_offset = self.data_aug_conf['crop_offset']
+            crop_w = crop_w + int(np.random.uniform(-crop_offset, crop_offset))
+            crop_h = crop_h + int(np.random.uniform(-crop_offset, crop_offset))
+
+            crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+        else: # validation/test
+            # do a perfect resize
+            resize_dims = (fW, fH)
+            crop_h = 0
+            crop_w = 0
+            crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+        return resize_dims, crop
+
+    def get_image_data(self, token, timestamp):
+        samples = self.nusc.sample 
+        for sam in samples :
+            if sam['token'] == token :
+                rec = sam
+                break
+        cams = ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT','CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT']
+        
+        imgs = []
+        rots = []
+        trans = []
+        intrins = []
+        for cam in cams:
+            samp = self.nusc.get('sample_data', rec['data'][cam])
+
+            imgname = os.path.join(self.dataroot, samp['filename'])
+            img = Image.open(imgname)
+            W, H = img.size
+
+            sens = self.nusc.get('calibrated_sensor', samp['calibrated_sensor_token'])
+            intrin = torch.Tensor(sens['camera_intrinsic'])
+            rot = torch.Tensor(Quaternion(sens['rotation']).rotation_matrix)
+            tran = torch.Tensor(sens['translation'])
+
+            resize_dims, crop = self.sample_augmentation()
+
+            sx = resize_dims[0]/float(W)
+            sy = resize_dims[1]/float(H)
+
+            intrin = geom_utils.scale_intrinsics(intrin.unsqueeze(0), sx, sy).squeeze(0)
+
+            fx, fy, x0, y0 = geom_utils.split_intrinsics(intrin.unsqueeze(0))
+
+            new_x0 = x0 - crop[0]
+            new_y0 = y0 - crop[1]
+
+            pix_T_cam = geom_utils.merge_intrinsics(fx, fy, new_x0, new_y0)
+            intrin = pix_T_cam.squeeze(0)
+
+            img = img_transform(img, resize_dims, crop)
+            imgs.append(totorch_img(img))
+
+            intrins.append(intrin)
+            rots.append(rot)
+            trans.append(tran)
+
+            
+        return (torch.stack(imgs), torch.stack(rots), torch.stack(trans),torch.stack(intrins))
+
+
     def _format_bbox(self, results, jsonfile_prefix=None):
         """Convert the results to the standard format.
 
@@ -367,14 +550,14 @@ class NuScenesDataset(Custom3DDataset):
                     elif name in ["bicycle", "motorcycle"]:
                         attr = "cycle.with_rider"
                     else:
-                        attr = NuScenesDataset.DefaultAttribute[name]
+                        attr = NuScenesDataset2.DefaultAttribute[name]
                 else:
                     if name in ["pedestrian"]:
                         attr = "pedestrian.standing"
                     elif name in ["bus"]:
                         attr = "vehicle.stopped"
                     else:
-                        attr = NuScenesDataset.DefaultAttribute[name]
+                        attr = NuScenesDataset2.DefaultAttribute[name]
 
                 nusc_anno = dict(
                     sample_token=sample_token,
