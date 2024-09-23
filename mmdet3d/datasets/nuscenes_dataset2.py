@@ -417,7 +417,7 @@ class NuScenesDataset2(Custom3DDataset):
         return anns_results
 
     def sample_augmentation(self):
-        final_dim = (256, 704)
+        final_dim = (448, 800)
 
         resize_lim = [0.8,1.2]
         crop_offset = int(final_dim[0]*(1-resize_lim[0]))

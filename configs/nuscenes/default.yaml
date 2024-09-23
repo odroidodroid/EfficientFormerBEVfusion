@@ -9,6 +9,7 @@ load_augmented: null
 point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size: [0.1, 0.1, 0.2]
 image_size: [256, 704]
+# image_size : [448, 800]
 
 augment2d:
   resize: [[0.38, 0.55], [0.48, 0.48]]

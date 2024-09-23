@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from mmcv.cnn import ConvModule, build_norm_layer
 from mmcv.runner import BaseModule, auto_fp16
 from torch import Tensor
-
+import torch
 from ..builder import NECKS
 
 
@@ -15,87 +15,44 @@ class SimpleFPN(BaseModule):
     """Simple Feature Pyramid Network for ViTDet."""
 
     def __init__(self,
-                 backbone_channel: int,
-                 in_channels: List[int],
-                 out_channels: int,
-                 num_outs: int,
+                 in_channels,
+                 out_channels,
+                 num_outs,
+                 start_level=0,
+                 end_level=-1,
+                 no_norm_on_lateral=False,
                  conv_cfg = None,
                  norm_cfg = None,
                  act_cfg = None,
-                 init_cfg = None) -> None:
-        super().__init__(init_cfg=init_cfg)
+                 upsample_cfg=dict(mode="bilinear", align_corners=True),
+                 ) -> None:
+        super().__init__()
         assert isinstance(in_channels, list)
-        self.backbone_channel = backbone_channel
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.num_ins = len(in_channels)
-        self.num_outs = num_outs
+        self.upsampling_layer = UpsamplingConcat(1536, 512)
+        self.depth_layer = nn.Conv2d(512, out_channels, kernel_size=1, padding=0)
+    @auto_fp16()
+    def forward(self, inputs) :
+        outs = self.upsampling_layer(inputs[1], inputs[0])
+        outs = self.depth_layer(outs)
+        return outs
 
-        self.fpn1 = nn.Sequential(
-            nn.ConvTranspose2d(self.backbone_channel,
-                               self.backbone_channel // 2, 2, 2),
-            build_norm_layer(norm_cfg, self.backbone_channel // 2)[1],
-            nn.GELU(),
-            nn.ConvTranspose2d(self.backbone_channel // 2,
-                               self.backbone_channel // 4, 2, 2))
-        self.fpn2 = nn.Sequential(
-            nn.ConvTranspose2d(self.backbone_channel,
-                               self.backbone_channel // 2, 2, 2))
-        self.fpn3 = nn.Sequential(nn.Identity())
-        self.fpn4 = nn.Sequential(nn.MaxPool2d(kernel_size=2, stride=2))
+class UpsamplingConcat(nn.Module):
+    def __init__(self, in_channels, out_channels, scale_factor=2):
+        super().__init__()
 
-        self.lateral_convs = nn.ModuleList()
-        self.fpn_convs = nn.ModuleList()
+        self.upsample = nn.Upsample(scale_factor=scale_factor, mode='bilinear', align_corners=False)
 
-        for i in range(self.num_ins):
-            l_conv = ConvModule(
-                in_channels[i],
-                out_channels,
-                1,
-                conv_cfg=conv_cfg,
-                norm_cfg=norm_cfg,
-                act_cfg=act_cfg,
-                inplace=False)
-            fpn_conv = ConvModule(
-                out_channels,
-                out_channels,
-                3,
-                padding=1,
-                conv_cfg=conv_cfg,
-                norm_cfg=norm_cfg,
-                act_cfg=act_cfg,
-                inplace=False)
-
-            self.lateral_convs.append(l_conv)
-            self.fpn_convs.append(fpn_conv)
-
-    def forward(self, input: Tensor) -> tuple:
-        """Forward function.
-
-        Args:
-            inputs (Tensor): Features from the upstream network, 4D-tensor
-        Returns:
-            tuple: Feature maps, each is a 4D-tensor.
-        """
-        # build FPN
-        inputs = []
-        inputs.append(self.fpn1(input))
-        inputs.append(self.fpn2(input))
-        inputs.append(self.fpn3(input))
-        inputs.append(self.fpn4(input))
-
-        # build laterals
-        laterals = [
-            lateral_conv(inputs[i])
-            for i, lateral_conv in enumerate(self.lateral_convs)
-        ]
-
-        # build outputs
-        # part 1: from original levels
-        outs = [self.fpn_convs[i](laterals[i]) for i in range(self.num_ins)]
-
-        # part 2: add extra levels
-        if self.num_outs > len(outs):
-            for i in range(self.num_outs - self.num_ins):
-                outs.append(F.max_pool2d(outs[-1], 1, stride=2))
-        return tuple(outs)
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.InstanceNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+    def forward(self, x_to_upsample, x):
+        x_to_upsample = self.upsample(x_to_upsample)
+        x_to_upsample = torch.cat([x, x_to_upsample], dim=1)
+        return self.conv(x_to_upsample)

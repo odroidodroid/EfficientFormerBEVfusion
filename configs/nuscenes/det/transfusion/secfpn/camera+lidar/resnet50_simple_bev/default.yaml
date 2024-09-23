@@ -1,4 +1,5 @@
-voxel_size: [0.075, 0.075, 0.2]
+voxel_size: [0.0675, 0.0675, 0.2]
+# voxel_size: [0.075, 0.075, 0.2]
 point_cloud_range: [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
 
 model:
@@ -7,36 +8,54 @@ model:
       backbone:
         type: ResNet
         depth: 50
-        out_indices: [0, 1, 2, 3]
+        out_indices: [1,2]
         #init_cfg:
         #  type: Pretrained
         #   #checkpoint: pretrained/camera_backbone_ckpt.pth
         #  checkpoint: https://download.pytorch.org/models/resnet50-0676ba61.pth
       neck:
-        in_channels: [256, 512, 1024, 2048]
+        type : SimpleFPN
+        in_channels: [512,1024]
+        out_channels: 128
       vtransform:
         type: SimpleBEV
         image_size: ${image_size}
-        feature_bev_size: [180, 8, 180]
-        bounds : [-54.0, 54.0, -5.0, 3.0, -54.0, 54.0]
+        feature_bev_size: [200, 8, 200]
+        bounds : [-50.0, 50.0, -5.0, 5.0, -50.0, 50.0]
     lidar:
       voxelize:
         point_cloud_range: ${point_cloud_range}
         voxel_size: ${voxel_size}
         max_voxels: [120000, 160000]
       backbone:
-        sparse_shape: [1440, 1440, 41]
+        sparse_shape: [1600, 1600, 41]
 
   heads:
     object:
       train_cfg:
-        grid_size: [1440, 1440, 41]
+        grid_size: [1600, 1600, 41]
       test_cfg:
-        grid_size: [1440, 1440, 41]
+        grid_size: [1600, 1600, 41]
+#    map:
+#      type: BEVSegmentationHead
+#      in_channels: 256
+#      grid_transform:
+#        input_scope: [[-51.2, 51.2, 0.8], [-51.2, 51.2, 0.8]]
+#        output_scope: [[-50, 50, 0.5], [-50, 50, 0.5]]
+#      classes: ${map_classes}
+#      loss: focal
+
 
 lr_config:
   policy: CosineAnnealing
   warmup: linear
-  warmup_iters: 500
+  warmup_iters: 20000
   warmup_ratio: 0.33333333
   min_lr_ratio: 1.0e-3
+
+optimizer:
+  type: AdamW
+  lr: 2.0e-4
+  weight_decay: 0.0001
+
+fp16: null

@@ -112,7 +112,7 @@ class DepthLSSTransform(BaseDepthTransform):
     def forward(self, *args, **kwargs):
         x = super().forward(*args, **kwargs)
         # latent rendering.. before or after downsample? 
-        if not self.latent_render:
+        if self.latent_rendering is not None:
             x = self.latent_rendering(x.permute(0, 2, 3, 1)) # bs, bev_h, bev_w, embed_dim
         x = self.downsample(x)
         return x

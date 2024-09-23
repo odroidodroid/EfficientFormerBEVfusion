@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 import torch
-from mmcv.runner import auto_fp16, force_fp32
+from mmcv.runner import auto_fp16, force_fp32, wrap_fp16_model
 from torch import nn
 from torch.nn import functional as F
 import time
@@ -34,7 +34,6 @@ class BEVFusion(Base3DFusionModel):
         **kwargs,
     ) -> None:
         super().__init__()
-
         self.encoders = nn.ModuleDict()
         if encoders.get("camera") is not None:
             self.encoders["camera"] = nn.ModuleDict(
@@ -160,8 +159,23 @@ class BEVFusion(Base3DFusionModel):
         lidar_aug_matrix,
         img_metas,**kwargs
     ) -> torch.Tensor:
+        # simpleBEV 
+        # self.mean = torch.as_tensor([0.485, 0.456, 0.406]).view(1,1,3,1,1).float().cuda()
+        # self.std = torch.as_tensor([0.229, 0.224, 0.225]).view(1,1,3,1,1).float().cuda()
+        # x = kwargs["sim_imgs"].data[0].cuda()
+
+        # if not self.training :
+        #     x = x.unsqueeze(0)
+        # x = (x - self.mean) / self.std
+        
+        # visualize
+        # image = x.cpu().detach().numpy()
+        # plt.imshow(image[0][0].transpose(1,2,0))
+        # plt.grid(b=None)
+        # plt.savefig(os.path.join('runs', f'image.png'))
+        # plt.close()
+        
         B, N, C, H, W = x.size()
-        img = x
         x = x.view(B * N, C, H, W)
         x = self.encoders["camera"]["backbone"](x)
         x = self.encoders["camera"]["neck"](x)
@@ -186,7 +200,6 @@ class BEVFusion(Base3DFusionModel):
             img_metas,**kwargs
         )
         return x
-
     def extract_lidar_features(self, x) -> torch.Tensor:
         #feats, coords, sizes = self.voxelize(x)
         #batch_size = coords[-1, 0] + 1
@@ -230,7 +243,8 @@ class BEVFusion(Base3DFusionModel):
                 feats = feats.contiguous()
         return feats, coords, sizes
 
-    @auto_fp16(apply_to=("img", "points"))
+    # @auto_fp16(apply_to=("img", "points"))
+    @auto_fp16(apply_to=("points"))
     def forward(
         self,
         img,
@@ -286,7 +300,8 @@ class BEVFusion(Base3DFusionModel):
             )
             return outputs
 
-    @auto_fp16(apply_to=("img", "points"))
+    # @auto_fp16(apply_to=("img", "points"))
+    @auto_fp16(apply_to=("points"))
     def forward_single(
         self,
         img,
@@ -323,22 +338,23 @@ class BEVFusion(Base3DFusionModel):
                     lidar_aug_matrix,
                     metas,**kwargs
                 )
+                visualize_bev = False
+                if visualize_bev :
+                    bs, bev_ch, bev_h, bev_w = feature.shape
+                    bev_feature = feature[0].reshape(bev_ch, bev_h, bev_w).detach().cpu().numpy()
+                    for bch in range(0, 5) :
+                        channel_feature = bev_feature[bch]
+                        plt.imshow(channel_feature, cmap='viridis')
+                        plt.colorbar()
+                        plt.grid(b=None)
+                        plt.savefig(os.path.join('runs', f'waypoint_{sensor}_channel_{bch}.png'))
+                        plt.close()
+
             elif sensor == "lidar":
                 feature = self.extract_lidar_features(points)
             else:
                 raise ValueError(f"unsupported sensor: {sensor}")
             features.append(feature)
-            visualize_bev = False
-            if visualize_bev :
-                bs, bev_ch, bev_h, bev_w = feature.shape
-                bev_feature = feature[0].reshape(bev_ch, bev_h, bev_w).detach().cpu().numpy()
-                for bch in range(0, 5) :
-                    channel_feature = bev_feature[bch]
-                    plt.imshow(channel_feature, cmap='viridis')
-                    plt.colorbar()
-                    plt.grid(b=None)
-                    plt.savefig(os.path.join('runs', f'{sensor}_channel_{bch}.png'))
-                    plt.close()
                     
         if not self.training:
             # avoid OOM

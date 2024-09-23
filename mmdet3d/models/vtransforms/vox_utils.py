@@ -304,12 +304,12 @@ class Vox_util(object):
             xyz_memA = gridcloud3d(B, Z, Y, X, norm=False, device=pixB_T_camA.device)
             xyz_camA = self.Mem2Ref(xyz_memA, Z, Y, X, assert_cube=assert_cube)
 
-        xyz_camB = apply_4x4(camB_T_camA, xyz_camA).float()
+        xyz_camB = apply_4x4(camB_T_camA, xyz_camA)
         z = xyz_camB[:,:,2]
-        
-        xyz_pixB = apply_4x4(pixB_T_camA, xyz_camA).float()
+
+        xyz_pixB = apply_4x4(pixB_T_camA, xyz_camA)
         normalizer = torch.unsqueeze(xyz_pixB[:,:,2], 2)
-        EPS=1e-5
+        EPS=1e-6
         # z = xyz_pixB[:,:,2]
         xy_pixB = xyz_pixB[:,:,:2]/torch.clamp(normalizer, min=EPS)
         # this is B x N x 2
@@ -329,7 +329,7 @@ class Vox_util(object):
                 values[b] = utils.samp.bilinear_sample_single(rgb_camB[b], x_pixB[b], y_pixB[b])
         else:
             # native pytorch version
-            y_pixB, x_pixB = basic_utils.normalize_grid2d(y, x, H, W)
+            y_pixB, x_pixB = normalize_grid2d(y, x, H, W)
             # since we want a 3d output, we need 5d tensors
             z_pixB = torch.zeros_like(x)
             xyz_pixB = torch.stack([x_pixB, y_pixB, z_pixB], axis=2)

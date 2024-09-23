@@ -9,7 +9,7 @@ from .default_constructor import DefaultRunnerConstructor
 from .dist_utils import (allreduce_grads, allreduce_params, get_dist_info,
                          init_dist, master_only)
 from .epoch_based_runner import EpochBasedRunner, Runner
-from .fp16_utils import LossScaler, auto_fp16, force_fp32, wrap_fp16_model
+from .fp16_utils import LossScaler, auto_fp16, force_fp32, wrap_fp16_model, patch_norm_fp32
 from .hooks import (HOOKS, CheckpointHook, ClosureHook, DistEvalHook,
                     DistSamplerSeedHook, DvcliveLoggerHook, EMAHook, EvalHook,
                     Fp16OptimizerHook, GradientCumulativeFp16OptimizerHook,
@@ -43,5 +43,5 @@ __all__ = [
     'allreduce_params', 'LossScaler', 'CheckpointLoader', 'BaseModule',
     '_load_checkpoint_with_prefix', 'EvalHook', 'DistEvalHook', 'Sequential',
     'ModuleList', 'GradientCumulativeOptimizerHook',
-    'GradientCumulativeFp16OptimizerHook', 'DefaultRunnerConstructor'
+    'GradientCumulativeFp16OptimizerHook', 'DefaultRunnerConstructor','patch_norm_fp32'
 ]

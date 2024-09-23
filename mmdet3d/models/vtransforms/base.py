@@ -289,7 +289,7 @@ class BaseDepthTransform(BaseTransform):
                 masked_coords = cur_coords[c, on_img[c]].long()
                 masked_dist = dist[c, on_img[c]]
                 depth[b, c, 0, masked_coords[:, 0], masked_coords[:, 1]] = masked_dist
-
+        # print(torch.unique(depth))
                 # lidar to image projection
                 # x = masked_coords[:, 0].cpu().detach().numpy()
                 # y = masked_coords[:, 1].cpu().detach().numpy()

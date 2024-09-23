@@ -21,7 +21,7 @@ from mmdet.datasets import replace_ImageToTensor
 from mmdet3d.utils import recursive_eval
 
 import debugpy
-debugpy.listen(7575)
+debugpy.listen(7676)
 print("Wait for debugger...")
 debugpy.wait_for_client()
 print("Debugger attached") 
