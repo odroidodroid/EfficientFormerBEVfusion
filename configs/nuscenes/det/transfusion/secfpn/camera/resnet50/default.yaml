@@ -24,7 +24,7 @@ model:
     #     max_voxels: [120000, 160000]
     #   backbone:
     #     sparse_shape: [1440, 1440, 41]
-
+    lidar : null
   heads:
     object:
       train_cfg:

@@ -11,7 +11,7 @@ from mmdet3d.models.builder import HEADS, build_loss
 from mmdet3d.ops.iou3d.iou3d_utils import nms_gpu
 from mmdet.core import build_bbox_coder, multi_apply
 
-head_default = {'reg': [2, 2], 'height': [1, 2], 'dim': [3, 2], 'rot': [2, 2], 'vel': [2, 2], 'heatmap': (1, 2)}
+head_default = {'reg': [2, 2], 'height': [1, 2], 'dim': [3, 2], 'rot': [2, 2], 'vel': [2, 2]}
 __all__ = ["CenterHead, SeparateHead", "DCNSeparateHead"]
 
 def clip_sigmoid(x: torch.Tensor, eps: float = 1e-4) -> torch.Tensor:
@@ -38,7 +38,7 @@ class SeparateHead(BaseModule):
 
     def __init__(
         self,
-        in_channels=64,
+        in_channels,
         heads=head_default,
         head_conv=64,
         final_kernel=1,
@@ -54,7 +54,7 @@ class SeparateHead(BaseModule):
         ), "To prevent abnormal initialization behavior, init_cfg is not allowed to be set"
         super(SeparateHead, self).__init__(init_cfg=init_cfg)
         self.heads = heads
-        print(heads)
+        # print(heads)
         self.init_bias = init_bias
         for head in self.heads:
             classes, num_conv = self.heads[head]
@@ -333,12 +333,15 @@ class CenterHead(BaseModule):
 
 
         for num_cls in num_classes:
+            heads_ = head_default
+            heads_.update(heatmap=[num_cls, num_heatmap_convs])
+            separate_head = dict(separate_head)
+            separate_head.update(in_channels=share_conv_channel,
+                                                       heads=heads_,
+                                                       num_cls=num_cls)
             self.task_heads.append(builder.build_head(separate_head))
-        #     heads = copy.deepcopy(common_heads)
-        #     heads.update(dict(heatmap=(num_cls, num_heatmap_convs)))
-        #     print(heads)
-            # separate_head.update(
-            #     in_channels=share_conv_channel, heads=heads)
+            # heads.update(heatmap=(num_cls, num_heatmap_convs))
+            # # print(heads)
             # separate_head.update(in_channels=share_conv_channel, heads=heads)
 
     def forward_single(self, x):

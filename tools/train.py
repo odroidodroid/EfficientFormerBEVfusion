@@ -27,6 +27,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE", help="config file", default="configs/nuscenes/det/transfusion/pointpillars/lidar/pointpillars.yaml")
     parser.add_argument("--run-dir", metavar="DIR", help="run directory", default="runs")
+    parser.add_argument("--prune", type=bool, default=False)
     args, opts = parser.parse_known_args()
 
     configs.load(args.config, recursive=True)

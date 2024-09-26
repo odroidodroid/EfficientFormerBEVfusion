@@ -20,11 +20,11 @@ from mmdet.apis import multi_gpu_test, set_random_seed
 from mmdet.datasets import replace_ImageToTensor
 from mmdet3d.utils import recursive_eval
 
-import debugpy
-debugpy.listen(7676)
-print("Wait for debugger...")
-debugpy.wait_for_client()
-print("Debugger attached") 
+# import debugpy
+# debugpy.listen(7676)
+# print("Wait for debugger...")
+# debugpy.wait_for_client()
+# print("Debugger attached") 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="MMDet test (and eval) a model")

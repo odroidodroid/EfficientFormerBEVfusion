@@ -1,0 +1,10 @@
+prune_start_iter: 0
+prune_interval: 40
+prune_steps: 30
+prune_ratio: 0.45
+disable_layer_prune: false
+layer_cfg: mmdet3d/prune/configs/prune_configs/rn50_prune_layer.json
+fmap_cfg: mmdet3d/prune/configs/prune_configs/rn50_fmap.json
+group_size_cfg: mmdet3d/prune/configs/prune_configs/rn50_prune_groups.json
+latency_lut_file: mmdet3d/prune/LUT/rn50_titanv_cudnn_batch256.pkl
+lut_bs: 256
