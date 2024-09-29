@@ -17,7 +17,7 @@ from mmdet3d.models import build_model
 from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eval
 
 # import debugpy
-# debugpy.listen(7676)
+# debugpy.listen(7575)
 # print("Wait for debugger...")
 # debugpy.wait_for_client()
 # print("Debugger attached")
@@ -27,7 +27,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE", help="config file", default="configs/nuscenes/det/transfusion/pointpillars/lidar/pointpillars.yaml")
     parser.add_argument("--run-dir", metavar="DIR", help="run directory", default="runs")
-    parser.add_argument("--prune", type=str, default='none')
+    parser.add_argument("--prune", type=str, default=None, choices=['cam', 'lid', 'both', 'none'])
     args, opts = parser.parse_known_args()
 
     configs.load(args.config, recursive=True)

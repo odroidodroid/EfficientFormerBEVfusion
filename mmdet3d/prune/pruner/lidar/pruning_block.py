@@ -1,7 +1,11 @@
+from mmcv.runner import auto_fp16, force_fp32, wrap_fp16_model, patch_norm_fp32
 import torch
 import torch.nn as nn
 import spconv.pytorch as spconv
 from spconv.core import ConvAlgo
+from mmdet3d.prune.pruner.lidar.spconv_utils import replace_feature
+from mmdet3d.prune.pruner.lidar.split_voxels import split_voxels_v2, check_repeat
+from mmdet3d.ops.spconv import SparseConvTensor
 
 class SparseSequentialBatchdict(spconv.SparseSequential):
     def __init__(self, *args, **kwargs):
@@ -84,7 +88,7 @@ class SpatialPrunedSubmConvBlock(spconv.SparseModule):
         assert x_im.features.shape[0] == x_nim.features.shape[0] == mask_position.shape[0]
         new_features = x_im.features
         new_features[mask_position] = x_nim.features[mask_position]
-        x_im = x_im.replace_feature(new_features)
+        x_im = replace_feature(x_im, new_features)
         return x_im 
 
     def get_importance_mask(self, x, voxel_importance):
@@ -105,9 +109,8 @@ class SpatialPrunedSubmConvBlock(spconv.SparseModule):
                 mask_position[batch_index] =  batch_mask_position
         return mask_position.bool()
 
-
+    @auto_fp16(apply_to=("x",))
     def forward(self, x, batch_dict):
-
         # pred importance
         if self.pred_mode=="learnable":
             x_ = x
@@ -116,7 +119,7 @@ class SpatialPrunedSubmConvBlock(spconv.SparseModule):
         elif self.pred_mode=="attn_pred":
             x_features = x.features
             x_attn_predict = torch.abs(x_features).sum(1) / x_features.shape[1]
-            voxel_importance = self.sigmoid(x_attn_predict.view(-1, 1))
+            voxel_importance = self.sigmoid(x_attn_predict.view(-1, 1)).half()
         else:
              raise Exception('pred_mode is not define')
 
@@ -124,8 +127,8 @@ class SpatialPrunedSubmConvBlock(spconv.SparseModule):
         mask_position = self.get_importance_mask(x, voxel_importance)
 
         # conv
-        x = x.replace_feature(x.features * voxel_importance)
-        x_nim = x
+        x = replace_feature(x, x.features * voxel_importance)
+        x_nim = x.half()
         x_im = self.conv_block(x)
         
         # mask feature
@@ -228,8 +231,8 @@ class SpatialPrunedConvDownsample(spconv.SparseModule):
         voxel_indices_im = torch.cat(voxel_indices_im, dim=0)
         voxel_features_nim = torch.cat(voxel_features_nim, dim=0)
         voxel_indices_nim = torch.cat(voxel_indices_nim, dim=0)
-        x_im = spconv.SparseConvTensor(voxel_features_im, voxel_indices_im, x.spatial_shape, x.batch_size)
-        x_nim = spconv.SparseConvTensor(voxel_features_nim, voxel_indices_nim, x.spatial_shape, x.batch_size)
+        x_im = SparseConvTensor(voxel_features_im, voxel_indices_im, x.spatial_shape, x.batch_size)
+        x_nim = SparseConvTensor(voxel_features_nim, voxel_indices_nim, x.spatial_shape, x.batch_size)
         
         return x_im, x_nim
 
@@ -248,7 +251,7 @@ class SpatialPrunedConvDownsample(spconv.SparseModule):
             x_features = torch.cat(features_out_list, dim=0)
             x_indices = torch.cat(indices_coords_out_list, dim=0)
         
-        x_im = x_im.replace_feature(x_features)
+        x_im = replace_feature(x_im, x_features)
         x_im.indices = x_indices
         return x_im
 
@@ -271,7 +274,7 @@ class SpatialPrunedConvDownsample(spconv.SparseModule):
         spatial_indices = (coords[:, 0] >0) * (coords[:, 1] >0) * (coords[:, 2] >0)  * \
             (coords[:, 0] < new_spatial_shape[0]) * (coords[:, 1] < new_spatial_shape[1]) * (coords[:, 2] < new_spatial_shape[2])
 
-        x = spconv.SparseConvTensor(features[conv_valid_mask][spatial_indices], indices[conv_valid_mask][spatial_indices].contiguous(), new_spatial_shape, x.batch_size)
+        x = SparseConvTensor(features[conv_valid_mask][spatial_indices], indices[conv_valid_mask][spatial_indices].contiguous(), new_spatial_shape, x.batch_size)
 
         return x
 
@@ -284,7 +287,7 @@ class SpatialPrunedConvDownsample(spconv.SparseModule):
         elif self.pred_mode=="attn_pred":
             x_features = x.features
             x_attn_predict = torch.abs(x_features).sum(1) / x_features.shape[1]
-            voxel_importance = self.sigmoid(x_attn_predict.view(-1, 1))
+            voxel_importance = self.sigmoid(x_attn_predict.view(-1, 1)).half()
         else:
              raise Exception('pred_mode is not define')
 

@@ -2,9 +2,9 @@ from functools import partial
 import torch.nn as nn
 import spconv.pytorch as spconv
 from spconv.core import ConvAlgo
-
-from pruner.lidar.spconv_utils import replace_feature, spconv
-from pruner.lidar.pruning_block import SpatialPrunedSubmConvBlock, SpatialPrunedConvDownsample, SparseSequentialBatchdict
+from mmdet.models import BACKBONES
+from mmdet3d.prune.pruner.lidar.spconv_utils import replace_feature, spconv
+from mmdet3d.prune.pruner.lidar.pruning_block import SpatialPrunedSubmConvBlock, SpatialPrunedConvDownsample, SparseSequentialBatchdict
 
 class PostActBlock(spconv.SparseModule):
     def __init__(self, in_channels, out_channels, kernel_size, voxel_stride=1, indice_key=None, stride=1, padding=0, pruning_ratio=0.5, point_cloud_range=[-3, -40, 0, 1, 40, 70.4], voxel_size= [0.1, 0.05, 0.05],
@@ -124,7 +124,7 @@ class SparseBasicBlock(spconv.SparseModule):
 
         return out, batch_dict
 
-
+@BACKBONES.register_module()
 class VoxelPruningResBackBone8x(nn.Module):
     downsample_type = ["spconv", "spconv", "spconv"]
     downsample_pruning_ratio = [0.5, 0.5, 0.5]
@@ -272,7 +272,7 @@ class VoxelPruningResBackBone8x(nn.Module):
         return batch_dict
 
 
-
+@BACKBONES.register_module()
 class VoxelPruningBackBone8x(nn.Module):
     downsample_type = ["spconv", "spconv", "spconv"]
     downsample_pruning_ratio = [0.5, 0.5, 0.5]
@@ -430,11 +430,11 @@ class VoxelPruningBackBone8x(nn.Module):
         return batch_dict
 
 
-
+@BACKBONES.register_module()
 class VoxelPruningResBackBone8x_SPSS_SPRS(VoxelPruningResBackBone8x):
     conv_types = [[["spss", "spss"], ["spss", "spss"]], [["spss", "spss"], ["spss", "spss"]], [["spss", "spss"], ["spss", "spss"]], [["spss", "spss"], ["spss", "spss"]]]
     downsample_type = ["sprs", "sprs", "sprs"]
-
+@BACKBONES.register_module()
 class VoxelPruningBackBone8x_SPSS_SPRS(VoxelPruningBackBone8x):
     conv_types = [["spss", "spss"], ["spss", "spss"], ["spss", "spss"], ["spss", "spss"]]
     downsample_type = ["sprs", "sprs", "sprs"]

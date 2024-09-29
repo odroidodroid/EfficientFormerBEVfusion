@@ -12,7 +12,7 @@ from mmcv.runner import (
     build_runner,
 )
 from mmdet3d.runner import CustomEpochBasedRunner
-
+from mmdet3d.prune.train import EpochBasedPruningRunner
 from mmdet3d.utils import get_root_logger
 from mmdet.core import DistEvalHook
 from mmdet.datasets import build_dataloader, build_dataset, replace_ImageToTensor
@@ -57,9 +57,12 @@ def train_model(
 
     # build runner
     optimizer = build_optimizer(model, cfg.optimizer)
-
+    if cfg.prune != 'none' :
+        runner_cfg = dict(type='EpochBasedPruningRunner', max_epochs=6)
+    else :
+        runner_cfg = cfg.runner
     runner = build_runner(
-        cfg.runner,
+        runner_cfg,
         default_args=dict(
             model=model,
             optimizer=optimizer,

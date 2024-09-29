@@ -268,7 +268,7 @@ class BEVFusion(Base3DFusionModel):
         else:
             if not isinstance(img, torch.Tensor) :
                 img = img.data[0].half().cuda()
-                points = [points.data[0][0].cuda(), points.data[0][1].cuda(), points.data[0][2].cuda(), points.data[0][3].cuda()]
+                points = [points.data[0][i].cuda() for i in range(len(points.data[0]))]
                 camera2ego = camera2ego.data[0].cuda()
                 lidar2ego = lidar2ego.data[0].cuda()
                 lidar2camera = lidar2camera.data[0].cuda()
@@ -279,8 +279,8 @@ class BEVFusion(Base3DFusionModel):
                 lidar_aug_matrix = lidar_aug_matrix.data[0].cuda()
                 metas = metas.data[0]
                 gt_masks_bev = gt_masks_bev.cuda()
-                gt_bboxes_3d = [gt_bboxes_3d.data[0][0], gt_bboxes_3d.data[0][1], gt_bboxes_3d.data[0][2], gt_bboxes_3d.data[0][3]]
-                gt_labels_3d = [gt_labels_3d.data[0][0].cuda(), gt_labels_3d.data[0][1].cuda(), gt_labels_3d.data[0][2].cuda(), gt_labels_3d.data[0][3].cuda()]
+                gt_bboxes_3d = [gt_bboxes_3d.data[0][i] for i in range(len(gt_bboxes_3d.data[0]))]
+                gt_labels_3d = [gt_labels_3d.data[0][i].cuda() for i in range(len(gt_labels_3d.data[0]))]
             outputs = self.forward_single(
                 img,
                 points,
