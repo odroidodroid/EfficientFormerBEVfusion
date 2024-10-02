@@ -376,7 +376,7 @@ class VoxelPruningSparseEncoder(nn.Module):
                             out_channels,
                             3,
                             norm_fn=norm_fn,
-                            voxel_stride=2**(i+1),
+                            voxel_stride=2**i,
                             stride=2,
                             padding=padding,
                             indice_key=f"spconv{i + 1}",
@@ -436,7 +436,7 @@ class PostActBlock(spconv.SparseModule):
             raise NotImplementedError        
 
         self.bn1 = norm_fn(out_channels)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x, batch_dict):
         if isinstance(self.conv, (SpatialPrunedSubmConvBlock,)) or isinstance(self.conv, (SpatialPrunedConvDownsample,)):
@@ -466,7 +466,7 @@ class PruneSparseBasicBlock(spconv.SparseModule):
                   point_cloud_range=point_cloud_range, voxel_size=voxel_size, algo=algo, pruning_mode=pruning_mode
         )
         self.bn1 = norm_fn(planes)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
 
         self.conv2 = conv_block(
             planes, planes, 3, voxel_stride=voxel_stride, norm_fn=norm_fn, padding=padding, bias=bias, indice_key=indice_key+"_2", conv_type= conv_types[1], pruning_ratio=pruning_ratio,

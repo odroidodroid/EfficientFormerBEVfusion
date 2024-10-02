@@ -13,6 +13,7 @@ from mmcv.runner import (
 )
 from mmdet3d.runner import CustomEpochBasedRunner
 from mmdet3d.prune.train import EpochBasedPruningRunner
+from mmdet3d.prune.pruner.camera.camera_pruner import CameraPruner
 from mmdet3d.utils import get_root_logger
 from mmdet.core import DistEvalHook
 from mmdet.datasets import build_dataloader, build_dataset, replace_ImageToTensor
@@ -129,4 +130,9 @@ def train_model(
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
-    runner.run(data_loaders, [("train", 1)])
+        
+    if cfg.prune != 'none' :
+        pruner = CameraPruner(exp_cfg=cfg)
+        runner.run(data_loaders, [("train", 1)], pruner)
+    else :
+        runner.run(data_loaders, [("train", 1)])

@@ -37,12 +37,14 @@ class EpochBasedPruningRunner(BaseRunner) :
         self.mode = 'train'
         self.data_loader = data_loader
         self._max_iters = self._max_epochs * len(self.data_loader)
+        if pruner is not None :
+            pruner.init(self.model)
         self.call_hook('before_train_epoch')
         time.sleep(2)  # Prevent possible deadlock during epoch transition
         for i, data_batch in enumerate(self.data_loader):
             self._inner_iter = i
             self.call_hook('before_train_iter')
-            self.run_iter(data_batch, train_mode=True, **kwargs)
+            self.run_iter(data_batch, train_mode=True, pruner=pruner, **kwargs)
             self.call_hook('after_train_iter')
             if pruner is not None :
                 pruner.update_metric() ## global_iter? loss.backward() ~ optimizer.step()
@@ -51,7 +53,7 @@ class EpochBasedPruningRunner(BaseRunner) :
         self.call_hook('after_train_epoch')
         self._epoch += 1
         
-    def run(self, data_loaders, workflow, max_epochs=None, **kwargs):
+    def run(self, data_loaders, workflow, pruner=None, max_epochs=None, **kwargs):
         """Start running.
 
         Args:
@@ -106,7 +108,7 @@ class EpochBasedPruningRunner(BaseRunner) :
                 for _ in range(epochs):
                     if mode == 'train' and self.epoch >= self._max_epochs:
                         break
-                    epoch_runner(data_loaders[i], **kwargs)
+                    epoch_runner(data_loaders[i], pruner, **kwargs)
 
         time.sleep(1)  # wait for some hooks like loggers to finish
         self.call_hook('after_run')

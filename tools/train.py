@@ -10,7 +10,7 @@ from mmcv import Config
 from torchpack import distributed as dist
 from torchpack.environ import auto_set_run_dir, set_run_dir
 from torchpack.utils.config import configs
-
+import yaml
 from mmdet3d.apis.train import train_model
 from mmdet3d.datasets import build_dataset
 from mmdet3d.models import build_model
@@ -28,11 +28,13 @@ def main():
     parser.add_argument("config", metavar="FILE", help="config file", default="configs/nuscenes/det/transfusion/pointpillars/lidar/pointpillars.yaml")
     parser.add_argument("--run-dir", metavar="DIR", help="run directory", default="runs")
     parser.add_argument("--prune", type=str, default='none')
+    parser.add_argument("--prune_config", type=str, default='mmdet3d/prune/configs/prune_configs/camera/resnet50_prune.yaml')
     args, opts = parser.parse_known_args()
 
     configs.load(args.config, recursive=True)
+    if args.prune : 
+        configs.load(args.prune_config)
     configs.update(opts)
-
     cfg = Config(recursive_eval(configs), filename=args.config)
 
     torch.backends.cudnn.benchmark = cfg.cudnn_benchmark

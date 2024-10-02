@@ -6,78 +6,60 @@ import pickle as pkl
 import numpy as np
 import torch
 from mmdet3d.utils.logger import logging
-from pruner.camera.cost import CostCalculator
-from pruner.camera.importance import ChannelImportance
-from pruner.camera.prune_config import PruneConfigReader
+from mmdet3d.prune.pruner.camera.cost import CostCalculator
+from mmdet3d.prune.pruner.camera.importance import ChannelImportance
+from mmdet3d.prune.pruner.camera.prune_config import PruneConfigReader
 from torch import nn
-logger = logging.get_root_logger()
+logger = logging.getLogger()
 
 class CameraPruner() :
     def __init__(self, model, exp_cfg=None) :
-        # for stage in self.prune_stage : 
-        #     if stage == 'camera' :
-            self.prune_start = exp_cfg.prune_start_iter
-            self.prune_interval = exp_cfg.prune_interval
-            self.prune_steps = exp_cfg.prune_steps
-            self.prune_end = self.prune_start + self.prune_interval * self.prune_steps
-            self.disable_layer_prune = exp_cfg.disable_layer_prune
-            
-            self.group_mask = {}
-            self.layers = extract_layers(model, get_conv=True, get_bn=True)
-            c_config_reader = PruneConfigReader(exp_cfg.layer_cfg)
-            self.groups = c_config_reader.prune_groups
-            self.pre_group = c_config_reader.pre_group
-            self.conv_bn = c_config_reader.conv_bn
+            self._prune_start = exp_cfg.prune_start_iter
+            self._prune_interval = exp_cfg.prune_interval
+            self._prune_steps = exp_cfg.prune_steps
+            self._prune_end = self._prune_start + self._prune_interval * self._prune_steps
+            self._disable_layer_prune = exp_cfg.disable_layer_prune
+
             with open(exp_cfg.fmap_cfg, 'r') as f :
-                self.fmap_table = json.load(f)
+                self._fmap_table = json.load(f)
             with open(exp_cfg.group_size_cfg, 'r') as f :
-                self.channel_group_size = json.load(f)
+                self._channel_group_size = json.load(f)
+
+            config_reader = PruneConfigReader(exp_cfg.layer_cfg)
+            self._groups = config_reader.prune_groups
+            self._pre_group = config_reader.pre_group
+            self._conv_bn = config_reader.conv_bn
+            self.lut_bs = exp_cfg.lut_bs
+            self.prune_ratio = exp_cfg.prune_ratio
+            self.latency_lut_file = exp_cfg.latency_lut_file
+
+    def init(self, model) : 
+            self._group_mask = {}
+            self.layers = extract_layers(model, get_conv=True, get_bn=True)
             
-            self.importance_calculator = ChannelImportance()
-            self.cost_calculator = CostCalculator(
+            self._importance_calculator = ChannelImportance()
+            self._cost_calculator = CostCalculator(
                 self.layers,
-                self.groups,
-                self.pre_group,
-                self.fmap_table
+                self._groups,
+                self._pre_group,
+                self._fmap_table,
+                self.latency_lut_file,
+                self.lut_bs,
             )
-            # elif stage == 'lidar' :
-            #     self.l_spss = True
-            #     pass
-            # elif stage == 'fusion' :
-            #     self.f_prune_start = exp_cfg.prune_start_iter
-            #     self.f_prune_interval = exp_cfg.prune_interval
-            #     self.f_prune_steps = exp_cfg.prune_steps
-            #     self.f_prune_end = self.f_prune_start + self.f_prune_interval * self.f_prune_steps
-            #     self.f_disable_layer_prune = exp_cfg.disable_layer_prune
-                
-            #     self.f_group_mask = {}
-            #     self.f_layers = extract_layers(model, get_conv=True, get_bn=True)
-            #     f_config_reader = PruneConfigReader(exp_cfg.layer_cfg)
-            #     self.f_groups = f_config_reader.prune_groups
-            #     self.f_pre_group = f_config_reader.pre_group
-            #     self.f_conv_bn = f_config_reader.conv_bn
-            #     with open(exp_cfg.fmap_cfg, 'r') as f :
-            #         self.f_fmap_table = json.load(f)
-            #     with open(exp_cfg.group_size_cfg, 'r') as f :
-            #         self.f_channel_group_size = json.load(f)
-                
-            #     self.f_importance_calculator = ChannelImportance()
-            #     self.f_cost_calculator = CostCalculator(
-            #         self.f_layers,
-            #         self.f_groups,
-            #         self.f_pre_group,
-            #         self.f_fmap_table
-            #     )
-            # else :
-            #     pass
-        
+            initial_latency = self._cost_calculator.get_total_latency(self._group_mask)
+            self._prune_target = set_latency_prune_target(
+                initial_latency,
+                self._prune_start,
+                self._prune_steps,
+                self.prune_ratio
+            )
+
     def update_metric(self, global_step):
         if self._prune_start <= global_step < self._prune_end:
             self._importance_calculator.update_neuron_metric(
                 self.layers, self._groups, self._conv_bn
             )
 
-    
     def prune_step(self, global_step):
         pruned_num = 0
         if (

@@ -243,8 +243,8 @@ class BEVFusion(Base3DFusionModel):
                 feats = feats.contiguous()
         return feats, coords, sizes
 
-    # @auto_fp16(apply_to=("img", "points"))
-    @auto_fp16(apply_to=("points"))
+    # @auto_fp16(apply_to=("points"))
+    @auto_fp16(apply_to=("img", "points"))
     def forward(
         self,
         img,
@@ -300,8 +300,8 @@ class BEVFusion(Base3DFusionModel):
             )
             return outputs
 
-    # @auto_fp16(apply_to=("img", "points"))
-    @auto_fp16(apply_to=("points"))
+    # @auto_fp16(apply_to=("points"))
+    @auto_fp16(apply_to=("img", "points"))
     def forward_single(
         self,
         img,
